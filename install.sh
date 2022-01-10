@@ -10,4 +10,3 @@
 
 
 python3 -m build
-pip3 install ./dist/flares-segmentation-tlincke125-0.0.1.tar.gz
