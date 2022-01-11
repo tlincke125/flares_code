@@ -1,3 +1,8 @@
+from pathlib import Path
+import sys
+path_root = Path(__file__).parents[2]
+sys.path.append(str(path_root))
+
 from flares.utils import *
 from flares.data import *
 
@@ -21,12 +26,24 @@ GRAPH_EMB_SIZE = 128
 
 # Feature Library
 class ActiveRegion:
+    def __init__(self, hnum: int, date: str, root: str):
+        """An Active Region is an entry point into physical features for 
+        parameterization, segmentation, and graph methods. If the specified
+        (hnum, date) active region contains a nan, self.valid turns to false
+        and subsequent calls to ActiveRegion methods may fail given the existence
+        of nans
 
-    def __init__(self, hnum, date, root):
+        Args:
+            hnum (int): The specified harpnumber - file must exist in root/magnetogram/sharp_{hnum} 
+            date (datetime): The specified active region date and time - this date must exist in the specified harpnumber data folder 
+            root (asdkln): The path to the data. Root must be a directory that holds both root/magnetogram and root/continuum. Inside both
+            of these subfolders, there must be a series of folders labeled sharp_{hnum} that contain the sequence of fits files for extraction
+        """
     
+        # Generate xyz components of magnetic field and continuum
         self.Bz, self.Bx, self.By, self.cont = get_data(hnum, date, root)
         self.shape = self.Bz.shape
-        self.valid = True
+        self.valid = True # Valid is false
 
         if np.count_nonzero(np.isnan(self.Bz)) / self.Bz.size > 0.0:
             self.valid = False
@@ -87,6 +104,15 @@ class ActiveRegion:
 
     # Main Two Functions for accessing data
     def physical_features(self, mask):
+        """Extracts the physical fetures from the active region.
+
+        Args:
+            mask (Numpy boolean Array of the same shape as self): A mask (subset) of self to extract physical 
+            features on. ie, which pixels of self should this function compute
+
+        Returns:
+            1 dimensional Numpy array: an array with all of the physical features computed on the subset provided by mask
+        """
         mask = torch.from_numpy(mask).to(dev)
         self.switch_to_gpu()
 

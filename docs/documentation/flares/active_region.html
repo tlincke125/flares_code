@@ -1,0 +1,2094 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
+<meta name="generator" content="pdoc 0.10.0" />
+<title>flares.active_region API documentation</title>
+<meta name="description" content="" />
+<link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
+<link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
+<link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
+<style>:root{--highlight-color:#fe9}.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:30px;overflow:hidden}#sidebar > *:last-child{margin-bottom:2cm}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:1em 0 .50em 0}h3{font-size:1.4em;margin:25px 0 10px 0}h4{margin:0;font-size:105%}h1:target,h2:target,h3:target,h4:target,h5:target,h6:target{background:var(--highlight-color);padding:.2em 0}a{color:#058;text-decoration:none;transition:color .3s ease-in-out}a:hover{color:#e82}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900}pre code{background:#f8f8f8;font-size:.8em;line-height:1.4em}code{background:#f2f2f1;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{background:#f8f8f8;border:0;border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0;padding:1ex}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{margin-top:.6em;font-weight:bold}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-weight:bold;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}dt:target .name{background:var(--highlight-color)}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source summary,.git-link-div{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase}.source summary > *{white-space:nowrap;cursor:pointer}.git-link{color:inherit;margin-left:1em}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}td{padding:0 .5em}.admonition{padding:.1em .5em;margin-bottom:1em}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%;height:100vh;overflow:auto;position:sticky;top:0}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.item .name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul{padding-left:1.5em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS_CHTML" integrity="sha256-kZafAc6mZvK3W3v1pHOcUix30OHQN6pU/NO2oFkqZVw=" crossorigin></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/highlight.min.js" integrity="sha256-Uv3H6lx7dJmRfRvH8TH6kJD1TSK1aFcwgx+mdg3epi8=" crossorigin></script>
+<script>window.addEventListener('DOMContentLoaded', () => hljs.initHighlighting())</script>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>flares.active_region</code></h1>
+</header>
+<section id="section-intro">
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">from pathlib import Path
+import sys
+path_root = Path(__file__).parents[2]
+sys.path.append(str(path_root))
+
+from flares.utils import *
+from flares.data import *
+
+import torch
+import torch.nn.functional as F
+from skimage.morphology import square, binary_dilation
+from skimage.measure import label
+import numpy as np
+import networkx as nx
+import warnings
+
+from scipy.stats import skew
+from skimage.filters import threshold_local
+from skimage.morphology import square
+from skimage.measure import label
+
+
+NUM_FEATURES = 55
+GRAPH_EMB_SIZE = 128
+
+
+# Feature Library
+class ActiveRegion:
+    def __init__(self, hnum: int, date: str, root: str):
+        &#34;&#34;&#34;An Active Region is an entry point into physical features for 
+        parameterization, segmentation, and graph methods. If the specified
+        (hnum, date) active region contains a nan, self.valid turns to false
+        and subsequent calls to ActiveRegion methods may fail given the existence
+        of nans
+
+        Args:
+            hnum (int): The specified harpnumber - file must exist in root/magnetogram/sharp_{hnum} 
+            date (datetime): The specified active region date and time - this date must exist in the specified harpnumber data folder 
+            root (asdkln): The path to the data. Root must be a directory that holds both root/magnetogram and root/continuum. Inside both
+            of these subfolders, there must be a series of folders labeled sharp_{hnum} that contain the sequence of fits files for extraction
+        &#34;&#34;&#34;
+    
+        # Generate xyz components of magnetic field and continuum
+        self.Bz, self.Bx, self.By, self.cont = get_data(hnum, date, root)
+        self.shape = self.Bz.shape
+        self.valid = True # Valid is false
+
+        if np.count_nonzero(np.isnan(self.Bz)) / self.Bz.size &gt; 0.0:
+            self.valid = False
+            warnings.warn(f&#34;Hnum {hnum} date {date} has a nan, skipping&#34;)
+            return
+
+        
+        # To prevent nan&#39;s popping up do to small numbers,
+        # cut everything below minimum val to minimum val
+        minimum_val = 0.01
+        self.Bz[np.abs(self.Bz) &lt; minimum_val] = minimum_val
+        self.Bx[np.abs(self.Bx) &lt; minimum_val] = minimum_val
+        self.By[np.abs(self.By) &lt; minimum_val] = minimum_val
+
+
+        # All the fields / features
+        self.Bh = None
+        self.gamma = None
+        self.B = None
+        self.grad_B_x = None
+        self.grad_B_y = None
+        self.grad_Bh_x = None
+        self.grad_Bh_y = None
+        self.grad_Bz_x = None
+        self.grad_Bz_y = None
+        self.grad_Bx_x = None
+        self.grad_Bx_y = None
+        self.grad_By_x = None
+        self.grad_By_y = None
+        self.grad_Bm = None
+        self.J = None
+        self.Jh = None
+        self.hc = None
+        self.shear = None
+        self.rho = None
+        self.Bpx = None
+        self.Bpy = None
+        self.Bpz = None
+
+        # The three datasets
+        self.baseline = self.physical_features(np.ones(self.shape, dtype = bool))
+        self.segmented = np.zeros(4 * NUM_FEATURES)
+        self.graph_ds = np.zeros(GRAPH_EMB_SIZE)
+
+        # List of node masks
+        # Each index of node_masks corresponds to its feature vector in feature_vec
+        # Ditto w/ G
+        self.node_masks = np.zeros((0, self.shape[0], self.shape[1]))
+        self.node_feature_vecs = np.zeros((0, NUM_FEATURES))
+        self.G = nx.Graph() 
+
+        self.umbra = None
+        self.pumbra = None
+        self.nl = None
+        self.background = None
+        self.graph_edges_declared = False
+
+
+    # Main Two Functions for accessing data
+    def physical_features(self, mask):
+        &#34;&#34;&#34;Extracts the physical fetures from the active region.
+
+        Args:
+            mask (Numpy boolean Array of the same shape as self): A mask (subset) of self to extract physical 
+            features on. ie, which pixels of self should this function compute
+
+        Returns:
+            1 dimensional Numpy array: an array with all of the physical features computed on the subset provided by mask
+        &#34;&#34;&#34;
+        mask = torch.from_numpy(mask).to(dev)
+        self.switch_to_gpu()
+
+        moment_features = torch.tensor([
+            *self.z_moments(mask), \
+            *self.h_moments(mask), \
+            *self.gamma_moments(mask), \
+            *self.B_grad_moments(mask), \
+            *self.Bz_grad_moments(mask), \
+            *self.Bh_grad_moments(mask), \
+            *self.J_moments(mask), \
+            *self.Jh_moments(mask), \
+            *self.twist_moments(mask), \
+            *self.hc_moments(mask), \
+            *self.shear_moments(mask), \
+            *self.rho_moments(mask)
+            ])
+        val = torch.tensor([
+            self.phitot(mask), \
+            self.phitotabs(mask), \
+            self.itot(mask), \
+            self.itotabs(mask), \
+            self.hctot(mask), \
+            self.hctotabs(mask), \
+            self.totrho(mask), \
+            *moment_features
+            ])
+        self.come_back_from_gpu()
+        mask = mask.detach().cpu().numpy()
+        return val
+
+    def switch_to_gpu(self):
+        self.Bz = torch.from_numpy(self.Bz).to(dev)
+        self.Bx = torch.from_numpy(self.Bx).to(dev)
+        self.By = torch.from_numpy(self.By).to(dev)
+        self.cont = torch.from_numpy(self.cont).to(dev)
+
+    def come_back_from_gpu(self):
+        self.Bz = self.Bz.detach().cpu().numpy()
+        self.Bx = self.Bx.detach().cpu().numpy()
+        self.By = self.By.detach().cpu().numpy()
+        self.cont = self.cont.detach().cpu().numpy()
+
+    def assert_masks(self):
+        self.assert_neutral_lines()
+        self.assert_umbra_pumbra()
+        self.assert_background()
+
+    def assert_neutral_lines(self, kernel_radius = 1):
+        if self.nl is None:
+            # Find neutral Lines
+            thresh = 150
+            nl_mask = binary_dilation(self.Bz &lt; -thresh, square(3)) &amp; binary_dilation(self.Bz &gt; thresh, square(3))
+
+
+            labeled, labels, sizes = self.group_pixels(nl_mask)
+            labels, sizes = self.remove_small_groups(labeled, labels, sizes, 10)
+            labels, sizes = self.remove_percentage_max(labeled, labels, sizes)
+            labels, sizes = self.largest_n_clusters(labels, sizes)
+
+            # Add all the graph nodes
+            nl_mask = np.zeros(self.shape, dtype = bool)
+            cur_node = len(self.node_masks)
+
+            if len(sizes) == 0:
+                self.segmented[0:NUM_FEATURES] = 0
+                self.nl = nl_mask
+                return
+
+            for i in labels:
+                mask = labeled == i
+                self.node_masks = np.concatenate((self.node_masks, mask[None,...]), axis = 0)
+                self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(mask)))
+                self.G.add_node(cur_node)
+                cur_node += 1
+                nl_mask |= mask
+
+            # Compute the segmented data set
+            self.segmented[0:NUM_FEATURES] = self.physical_features(nl_mask)
+            self.nl = nl_mask
+
+
+    def assert_umbra_pumbra(self):
+        if self.pumbra is None or self.umbra is None:
+            cont_bounded = (255 * (self.cont - np.min(self.cont)) / np.ptp(self.cont)).astype(np.uint8)
+ 
+            block_size = np.min(self.shape)
+            if block_size % 2 == 0:
+                block_size -= 1
+                
+            offset = 10
+            binary_adaptive = cont_bounded &lt; (threshold_local(cont_bounded, block_size, offset = offset) - offset)
+
+            labeled_0, labels, sizes = self.group_pixels(binary_adaptive)
+            labels, sizes = self.remove_small_groups(labeled_0, labels, sizes)
+            labels, sizes = self.remove_bordering_pixels(labeled_0, labels, sizes)
+            labels, sizes = self.remove_percentage_max(labeled_0, labels, sizes)
+            labels, sizes = self.largest_n_clusters(labels, sizes)
+
+            um_mask = np.zeros(self.shape, dtype = bool)
+            pu_mask = np.zeros(self.shape, dtype = bool)
+            cur_node = 0
+
+            if len(sizes) == 0:
+                self.segmented[NUM_FEATURES:2*NUM_FEATURES] = 0
+                self.segmented[2*NUM_FEATURES:3*NUM_FEATURES] = 0
+                self.umbra = um_mask
+                self.pumbra = pu_mask
+                return
+
+            for i in labels:
+                mask = labeled_0 == i
+                mx = np.max(self.cont[mask])
+                mn = np.min(self.cont[mask])
+                t = (mx - mn) / 2 + mn
+                if mx - mn &gt; 21000:
+                    # Both umbra and penumbra
+                    um = mask &amp; (self.cont &lt;= t)
+                    pu = mask &amp; (self.cont &gt; t)
+
+
+                    # Further segment the umbra node again
+                    labeled, labels, sizes = self.group_pixels(pu)
+                    labels, sizes = self.remove_small_groups(labeled, labels, sizes, 10)
+                    labels, sizes = self.remove_percentage_max(labeled, labels, sizes)
+                    labels, sizes = self.largest_n_clusters(labels, sizes)
+
+                    for i in labels:
+                        mask = labeled == i
+                        self.node_masks = np.concatenate((self.node_masks, mask[None,...]), axis = 0)
+                        self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(mask)))
+                        self.G.add_node(cur_node)
+                        cur_node += 1
+                        pu_mask |= mask
+
+                    # Further segment the umbra node again
+                    labeled, labels, sizes = self.group_pixels(um)
+                    labels, sizes = self.remove_small_groups(labeled, labels, sizes, 10)
+                    labels, sizes = self.remove_percentage_max(labeled, labels, sizes)
+                    labels, sizes = self.largest_n_clusters(labels, sizes)
+
+                    for i in labels:
+                        mask = labeled == i
+                        self.node_masks = np.concatenate((self.node_masks, mask[None,...]), axis = 0)
+                        self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(mask)))
+                        self.G.add_node(cur_node)
+                        cur_node += 1
+                        um_mask |= mask
+
+                else:
+                    # Only umbra
+                    um = mask &amp; (self.cont &lt;= t)
+                    self.node_masks = np.concatenate((self.node_masks, um[None,...]), axis = 0)
+                    self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(um)))
+                    self.G.add_node(cur_node)
+                    cur_node += 1
+                    um_mask |= um
+            
+            # Compute the segmented data set
+            self.segmented[NUM_FEATURES:2*NUM_FEATURES] = self.physical_features(um_mask)
+            self.segmented[2*NUM_FEATURES:3*NUM_FEATURES] = self.physical_features(pu_mask)
+            self.umbra = um_mask
+            self.pumbra = pu_mask
+
+    # Grouping and filtering operations
+    def group_pixels(self, mask):
+        labeled = label(mask, connectivity = 2)
+        labels = np.unique(labeled)[1:]
+        sizes = np.array([np.count_nonzero(labeled==i) for i in labels])
+        return labeled, labels, sizes
+    def remove_small_groups(self, labeled, labels, sizes, p = 500):
+        if len(sizes) == 0:
+            return labels, sizes
+        filt = np.argwhere((sizes &lt; p))
+        return np.delete(labels, filt), np.delete(sizes, filt)
+    def remove_bordering_pixels(self, labeled, labels, sizes):
+        if len(sizes) == 0:
+            return labels, sizes
+        bordered = []
+        for i in range(len(labels)):
+            rows, cols = np.where(labeled == labels[i])
+            if min(rows) == 0 or min(cols) == 0:
+                bordered.append(i)
+            if max(cols) == self.shape[1] - 1 or max(rows) == self.shape[0] - 1:
+                bordered.append(i)
+        return np.delete(labels, bordered), np.delete(sizes, bordered)
+    def remove_percentage_max(self, labeled, labels, sizes, p = 0.1):
+        if len(sizes) == 0:
+            return labels, sizes
+        filt = np.argwhere(sizes &lt; p * np.max(sizes))
+        return np.delete(labels, filt), np.delete(sizes, filt)
+    def largest_n_clusters(self, labels, sizes, n = 6):
+        if len(sizes) == 0:
+            return labels, sizes
+        n = min(n, len(labels))
+        a = np.partition(sizes, -n)[-n]
+        return labels[sizes &gt;= a], sizes[sizes &gt;= a]
+
+    def assert_background(self):
+        if self.background is None:
+            self.background = torch.zeros(self.shape, dtype=bool)
+            self.assert_neutral_lines()
+            self.assert_umbra_pumbra()
+
+            #  node = {&#34;COM&#34; : (0, 0), &#34;MASK&#34; : ~(self.nl | self.umbra | self.pumbra)}
+            background = ~(self.nl | self.umbra | self.pumbra)
+            self.segmented[3*NUM_FEATURES:4*NUM_FEATURES] = self.physical_features(background)
+            self.background = background
+
+    def connect_edges(self):
+        self.assert_masks()
+        if not self.graph_edges_declared:
+            for i in range(len(self.node_masks) - 1):
+                for j in range(i + 1, len(self.node_masks)):
+                    if np.count_nonzero(binary_dilation(self.node_masks[i], square(3)) &amp; binary_dilation(self.node_masks[j], square(3))) &gt; 0:
+                        self.G.add_edge(i, j)
+            self.graph_edges_declared = True
+            
+
+    # Tools
+    def moment(self, data):
+        avg = torch.mean(data)
+        std = torch.sqrt(torch.mean((data - avg)**2))
+        skw = torch.mean(((data - avg)/std)**3)
+        krt = torch.mean(((data - avg)/std)**4) - 3.0
+        return torch.tensor([avg, std, skw, krt])
+
+    def norm(self, data):
+        n = 0
+        for i in data:
+            n += torch.abs(i)
+        return n
+
+
+    # Physical Properties
+    def z_moments(self, mask):
+        return self.moment(self.Bz[mask])
+    def phitot(self, mask):
+        return torch.sum(torch.abs(self.Bz[mask]))
+    def phitotabs(self, mask):
+        return torch.abs(torch.sum(self.Bz[mask]))
+    def h_moments(self, mask):
+        self.assert_Bh()
+        return self.moment(self.Bh[mask])
+    def gamma_moments(self, mask):
+        self.assert_gamma()
+        return self.moment(self.gamma[mask])
+    def B_grad_moments(self, mask):
+        self.assert_grad_B()
+        return self.moment(self.norm((self.grad_B_x[mask], self.grad_B_y[mask])))
+    def Bz_grad_moments(self, mask):
+        self.assert_grad_Bz()
+        return self.moment(self.norm((self.grad_Bz_x[mask], self.grad_Bz_y[mask])))
+    def Bh_grad_moments(self, mask):
+        self.assert_grad_Bh()
+        return self.moment(self.norm((self.grad_Bh_x[mask], self.grad_Bh_y[mask])))
+    def J_moments(self, mask):
+        self.assert_J()
+        return self.moment(self.J[mask])
+    def itot(self, mask):
+        self.assert_J()
+        return torch.sum(torch.abs(self.J[mask]))
+    def itotabs(self, mask):
+        self.assert_J()
+        return torch.abs(torch.sum(self.J[mask]))
+    def itot_polarity(self, mask):
+        self.assert_J()
+        return torch.abs(torch.sum(self.J[self.Bz &gt; 0 &amp; mask])) + torch.abs(torch.sum(self.J[self.Bz &lt; 0 &amp; mask]))
+    def Jh_moments(self, mask):
+        self.assert_Jh()
+        return self.moment(self.Jh[mask])
+    def ihtot(self, mask):
+        self.assert_Jh()
+        return torch.sum(torch.abs(self.Jh[mask]))
+    def ihtotabs(self, mask):
+        self.assert_Jh()
+        return torch.abs(torch.sum(self.Jh[mask]))
+    def twist_moments(self, mask):
+        self.assert_J()
+        return self.moment(self.J[mask] / self.Bz[mask])
+    # Too computationally intensive
+    #def twist_force_free_m(self):
+    #    pass
+    def hc_moments(self, mask):
+        self.assert_hc()
+        return self.moment(self.hc[mask])
+    def hctot(self, mask):
+        self.assert_hc()
+        return torch.sum(torch.abs(self.hc[mask]))
+    def hctotabs(self, mask):
+        self.assert_hc()
+        return torch.abs(torch.sum(self.hc[mask]))
+    def shear_moments(self, mask):
+        self.assert_shear() # Pretty big function call right here
+        return self.moment(self.shear[mask])
+    def rho_moments(self, mask):
+        self.assert_rho()
+        return self.moment(self.rho[mask])
+    def totrho(self, mask):
+        self.assert_rho()
+        return torch.sum(self.rho[mask])
+
+
+    # ASSERTIONS - designed so that each component is only calculated ONCE - example: if I want Bh,
+    # simply assert_Bh. If Bh already exists, then nothing is done
+    def assert_Bh(self):
+        if self.Bh is None:
+            self.Bh = self.norm((self.Bx, self.By))
+    def assert_gamma(self):
+        if self.gamma is None:
+            self.assert_Bh()
+            self.gamma = torch.arctan(self.Bz / self.Bh)
+    def assert_B(self):
+        if self.B is None:
+            self.B = self.norm((self.Bx, self.By, self.Bz))
+    def assert_grad_B(self):
+        if self.grad_B_x is None or self.grad_B_y is None:
+            self.assert_B()
+            self.grad_B_x, self.grad_B_y = gradient(self.B)
+    def assert_grad_Bh(self):
+        if self.grad_Bh_x is None or self.grad_Bh_y is None:
+            self.assert_Bh()
+            self.grad_Bh_x, self.grad_Bh_y = gradient(self.Bh)
+    def assert_grad_Bz(self):
+        if self.grad_Bz_x is None or self.grad_Bz_y is None:
+            self.grad_Bz_x, self.grad_Bz_y = gradient(self.Bz)
+    def assert_grad_Bx(self):
+        if self.grad_Bx_x is None or self.grad_Bx_y is None:
+            self.grad_Bx_x, self.grad_Bx_y = gradient(self.Bx)
+            self.grad_Bx_x = -self.grad_Bx_x
+    def assert_grad_By(self):
+        if self.grad_By_x is None or self.grad_By_y is None:
+            self.grad_By_x, self.grad_By_y = gradient(self.By)
+            self.grad_By_x = -self.grad_By_x
+    def assert_grad_Bm(self):
+        if self.grad_Bm is None:
+            self.assert_grad_B()
+            self.grad_Bm = self.norm((self.grad_B_x, self.grad_B_y))
+    def assert_J(self):
+        if self.J is None:
+            self.assert_grad_Bx()
+            self.assert_grad_By()
+            self.J = self.grad_By_x - self.grad_Bx_y
+    def assert_Jh(self):
+        if self.Jh is None:
+            self.assert_grad_Bx()
+            self.assert_grad_By()
+            self.assert_B()
+            self.Jh = (self.By * self.grad_Bx_y - self.Bx * self.grad_By_x) / self.B
+    def assert_hc(self):
+        if self.hc is None:
+            self.assert_J()
+            self.hc = self.Bz * self.J
+    def assert_shear(self):
+        if self.shear is None:
+            self.assert_Bp()
+            self.assert_B()
+            dot = self.Bx * self.Bpx + self.By * self.Bpy + self.Bz * self.Bpz
+            magp = self.norm((self.Bpx, self.Bpy, self.Bpz))
+            self.shear = torch.arccos(dot / (self.B * magp))
+    def assert_rho(self):
+        if self.rho is None:
+            self.assert_Bp()
+            self.rho = (self.B - self.norm((self.Bpx, self.Bpy, self.Bpz)))**2
+    def assert_Bp(self):
+        if self.Bpx is None or self.Bpy is None or self.Bpz is None:
+
+            Bz = F.pad(self.Bz, (radius, radius, radius, radius)).float()
+
+            dz = 0.0001
+            Xmx = Bz.shape[0]
+            Ymx = Bz.shape[1]
+
+            pot = torch.zeros(self.shape, device = dev).float()
+
+            # Distance kernel - a kernel with values filled in the &#34;circle&#34; (by def of norm) as the distance from
+            # the center multiplied by dz (for integration)
+
+            kern = dist_kern.to(dev)
+
+            # Convolution -- integrate over each pixel
+            pot = F.conv2d(Bz[None, None, ...], kern[None, None, ...])[0][0]
+
+            # Save potential
+            self.potential = pot
+
+            # Get Potential Fields
+            self.Bpz = self.Bz
+            grad = gradient(self.potential)
+            self.Bpx, self.Bpy = -grad[0], -grad[1]</code></pre>
+</details>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-classes">Classes</h2>
+<dl>
+<dt id="flares.active_region.ActiveRegion"><code class="flex name class">
+<span>class <span class="ident">ActiveRegion</span></span>
+<span>(</span><span>hnum: int, date: str, root: str)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>An Active Region is an entry point into physical features for
+parameterization, segmentation, and graph methods. If the specified
+(hnum, date) active region contains a nan, self.valid turns to false
+and subsequent calls to ActiveRegion methods may fail given the existence
+of nans</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>hnum</code></strong> :&ensp;<code>int</code></dt>
+<dd>The specified harpnumber - file must exist in root/magnetogram/sharp_{hnum} </dd>
+<dt><strong><code>date</code></strong> :&ensp;<code>datetime</code></dt>
+<dd>The specified active region date and time - this date must exist in the specified harpnumber data folder </dd>
+<dt><strong><code>root</code></strong> :&ensp;<code>asdkln</code></dt>
+<dd>The path to the data. Root must be a directory that holds both root/magnetogram and root/continuum. Inside both</dd>
+</dl>
+<p>of these subfolders, there must be a series of folders labeled sharp_{hnum} that contain the sequence of fits files for extraction</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class ActiveRegion:
+    def __init__(self, hnum: int, date: str, root: str):
+        &#34;&#34;&#34;An Active Region is an entry point into physical features for 
+        parameterization, segmentation, and graph methods. If the specified
+        (hnum, date) active region contains a nan, self.valid turns to false
+        and subsequent calls to ActiveRegion methods may fail given the existence
+        of nans
+
+        Args:
+            hnum (int): The specified harpnumber - file must exist in root/magnetogram/sharp_{hnum} 
+            date (datetime): The specified active region date and time - this date must exist in the specified harpnumber data folder 
+            root (asdkln): The path to the data. Root must be a directory that holds both root/magnetogram and root/continuum. Inside both
+            of these subfolders, there must be a series of folders labeled sharp_{hnum} that contain the sequence of fits files for extraction
+        &#34;&#34;&#34;
+    
+        # Generate xyz components of magnetic field and continuum
+        self.Bz, self.Bx, self.By, self.cont = get_data(hnum, date, root)
+        self.shape = self.Bz.shape
+        self.valid = True # Valid is false
+
+        if np.count_nonzero(np.isnan(self.Bz)) / self.Bz.size &gt; 0.0:
+            self.valid = False
+            warnings.warn(f&#34;Hnum {hnum} date {date} has a nan, skipping&#34;)
+            return
+
+        
+        # To prevent nan&#39;s popping up do to small numbers,
+        # cut everything below minimum val to minimum val
+        minimum_val = 0.01
+        self.Bz[np.abs(self.Bz) &lt; minimum_val] = minimum_val
+        self.Bx[np.abs(self.Bx) &lt; minimum_val] = minimum_val
+        self.By[np.abs(self.By) &lt; minimum_val] = minimum_val
+
+
+        # All the fields / features
+        self.Bh = None
+        self.gamma = None
+        self.B = None
+        self.grad_B_x = None
+        self.grad_B_y = None
+        self.grad_Bh_x = None
+        self.grad_Bh_y = None
+        self.grad_Bz_x = None
+        self.grad_Bz_y = None
+        self.grad_Bx_x = None
+        self.grad_Bx_y = None
+        self.grad_By_x = None
+        self.grad_By_y = None
+        self.grad_Bm = None
+        self.J = None
+        self.Jh = None
+        self.hc = None
+        self.shear = None
+        self.rho = None
+        self.Bpx = None
+        self.Bpy = None
+        self.Bpz = None
+
+        # The three datasets
+        self.baseline = self.physical_features(np.ones(self.shape, dtype = bool))
+        self.segmented = np.zeros(4 * NUM_FEATURES)
+        self.graph_ds = np.zeros(GRAPH_EMB_SIZE)
+
+        # List of node masks
+        # Each index of node_masks corresponds to its feature vector in feature_vec
+        # Ditto w/ G
+        self.node_masks = np.zeros((0, self.shape[0], self.shape[1]))
+        self.node_feature_vecs = np.zeros((0, NUM_FEATURES))
+        self.G = nx.Graph() 
+
+        self.umbra = None
+        self.pumbra = None
+        self.nl = None
+        self.background = None
+        self.graph_edges_declared = False
+
+
+    # Main Two Functions for accessing data
+    def physical_features(self, mask):
+        &#34;&#34;&#34;Extracts the physical fetures from the active region.
+
+        Args:
+            mask (Numpy boolean Array of the same shape as self): A mask (subset) of self to extract physical 
+            features on. ie, which pixels of self should this function compute
+
+        Returns:
+            1 dimensional Numpy array: an array with all of the physical features computed on the subset provided by mask
+        &#34;&#34;&#34;
+        mask = torch.from_numpy(mask).to(dev)
+        self.switch_to_gpu()
+
+        moment_features = torch.tensor([
+            *self.z_moments(mask), \
+            *self.h_moments(mask), \
+            *self.gamma_moments(mask), \
+            *self.B_grad_moments(mask), \
+            *self.Bz_grad_moments(mask), \
+            *self.Bh_grad_moments(mask), \
+            *self.J_moments(mask), \
+            *self.Jh_moments(mask), \
+            *self.twist_moments(mask), \
+            *self.hc_moments(mask), \
+            *self.shear_moments(mask), \
+            *self.rho_moments(mask)
+            ])
+        val = torch.tensor([
+            self.phitot(mask), \
+            self.phitotabs(mask), \
+            self.itot(mask), \
+            self.itotabs(mask), \
+            self.hctot(mask), \
+            self.hctotabs(mask), \
+            self.totrho(mask), \
+            *moment_features
+            ])
+        self.come_back_from_gpu()
+        mask = mask.detach().cpu().numpy()
+        return val
+
+    def switch_to_gpu(self):
+        self.Bz = torch.from_numpy(self.Bz).to(dev)
+        self.Bx = torch.from_numpy(self.Bx).to(dev)
+        self.By = torch.from_numpy(self.By).to(dev)
+        self.cont = torch.from_numpy(self.cont).to(dev)
+
+    def come_back_from_gpu(self):
+        self.Bz = self.Bz.detach().cpu().numpy()
+        self.Bx = self.Bx.detach().cpu().numpy()
+        self.By = self.By.detach().cpu().numpy()
+        self.cont = self.cont.detach().cpu().numpy()
+
+    def assert_masks(self):
+        self.assert_neutral_lines()
+        self.assert_umbra_pumbra()
+        self.assert_background()
+
+    def assert_neutral_lines(self, kernel_radius = 1):
+        if self.nl is None:
+            # Find neutral Lines
+            thresh = 150
+            nl_mask = binary_dilation(self.Bz &lt; -thresh, square(3)) &amp; binary_dilation(self.Bz &gt; thresh, square(3))
+
+
+            labeled, labels, sizes = self.group_pixels(nl_mask)
+            labels, sizes = self.remove_small_groups(labeled, labels, sizes, 10)
+            labels, sizes = self.remove_percentage_max(labeled, labels, sizes)
+            labels, sizes = self.largest_n_clusters(labels, sizes)
+
+            # Add all the graph nodes
+            nl_mask = np.zeros(self.shape, dtype = bool)
+            cur_node = len(self.node_masks)
+
+            if len(sizes) == 0:
+                self.segmented[0:NUM_FEATURES] = 0
+                self.nl = nl_mask
+                return
+
+            for i in labels:
+                mask = labeled == i
+                self.node_masks = np.concatenate((self.node_masks, mask[None,...]), axis = 0)
+                self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(mask)))
+                self.G.add_node(cur_node)
+                cur_node += 1
+                nl_mask |= mask
+
+            # Compute the segmented data set
+            self.segmented[0:NUM_FEATURES] = self.physical_features(nl_mask)
+            self.nl = nl_mask
+
+
+    def assert_umbra_pumbra(self):
+        if self.pumbra is None or self.umbra is None:
+            cont_bounded = (255 * (self.cont - np.min(self.cont)) / np.ptp(self.cont)).astype(np.uint8)
+ 
+            block_size = np.min(self.shape)
+            if block_size % 2 == 0:
+                block_size -= 1
+                
+            offset = 10
+            binary_adaptive = cont_bounded &lt; (threshold_local(cont_bounded, block_size, offset = offset) - offset)
+
+            labeled_0, labels, sizes = self.group_pixels(binary_adaptive)
+            labels, sizes = self.remove_small_groups(labeled_0, labels, sizes)
+            labels, sizes = self.remove_bordering_pixels(labeled_0, labels, sizes)
+            labels, sizes = self.remove_percentage_max(labeled_0, labels, sizes)
+            labels, sizes = self.largest_n_clusters(labels, sizes)
+
+            um_mask = np.zeros(self.shape, dtype = bool)
+            pu_mask = np.zeros(self.shape, dtype = bool)
+            cur_node = 0
+
+            if len(sizes) == 0:
+                self.segmented[NUM_FEATURES:2*NUM_FEATURES] = 0
+                self.segmented[2*NUM_FEATURES:3*NUM_FEATURES] = 0
+                self.umbra = um_mask
+                self.pumbra = pu_mask
+                return
+
+            for i in labels:
+                mask = labeled_0 == i
+                mx = np.max(self.cont[mask])
+                mn = np.min(self.cont[mask])
+                t = (mx - mn) / 2 + mn
+                if mx - mn &gt; 21000:
+                    # Both umbra and penumbra
+                    um = mask &amp; (self.cont &lt;= t)
+                    pu = mask &amp; (self.cont &gt; t)
+
+
+                    # Further segment the umbra node again
+                    labeled, labels, sizes = self.group_pixels(pu)
+                    labels, sizes = self.remove_small_groups(labeled, labels, sizes, 10)
+                    labels, sizes = self.remove_percentage_max(labeled, labels, sizes)
+                    labels, sizes = self.largest_n_clusters(labels, sizes)
+
+                    for i in labels:
+                        mask = labeled == i
+                        self.node_masks = np.concatenate((self.node_masks, mask[None,...]), axis = 0)
+                        self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(mask)))
+                        self.G.add_node(cur_node)
+                        cur_node += 1
+                        pu_mask |= mask
+
+                    # Further segment the umbra node again
+                    labeled, labels, sizes = self.group_pixels(um)
+                    labels, sizes = self.remove_small_groups(labeled, labels, sizes, 10)
+                    labels, sizes = self.remove_percentage_max(labeled, labels, sizes)
+                    labels, sizes = self.largest_n_clusters(labels, sizes)
+
+                    for i in labels:
+                        mask = labeled == i
+                        self.node_masks = np.concatenate((self.node_masks, mask[None,...]), axis = 0)
+                        self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(mask)))
+                        self.G.add_node(cur_node)
+                        cur_node += 1
+                        um_mask |= mask
+
+                else:
+                    # Only umbra
+                    um = mask &amp; (self.cont &lt;= t)
+                    self.node_masks = np.concatenate((self.node_masks, um[None,...]), axis = 0)
+                    self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(um)))
+                    self.G.add_node(cur_node)
+                    cur_node += 1
+                    um_mask |= um
+            
+            # Compute the segmented data set
+            self.segmented[NUM_FEATURES:2*NUM_FEATURES] = self.physical_features(um_mask)
+            self.segmented[2*NUM_FEATURES:3*NUM_FEATURES] = self.physical_features(pu_mask)
+            self.umbra = um_mask
+            self.pumbra = pu_mask
+
+    # Grouping and filtering operations
+    def group_pixels(self, mask):
+        labeled = label(mask, connectivity = 2)
+        labels = np.unique(labeled)[1:]
+        sizes = np.array([np.count_nonzero(labeled==i) for i in labels])
+        return labeled, labels, sizes
+    def remove_small_groups(self, labeled, labels, sizes, p = 500):
+        if len(sizes) == 0:
+            return labels, sizes
+        filt = np.argwhere((sizes &lt; p))
+        return np.delete(labels, filt), np.delete(sizes, filt)
+    def remove_bordering_pixels(self, labeled, labels, sizes):
+        if len(sizes) == 0:
+            return labels, sizes
+        bordered = []
+        for i in range(len(labels)):
+            rows, cols = np.where(labeled == labels[i])
+            if min(rows) == 0 or min(cols) == 0:
+                bordered.append(i)
+            if max(cols) == self.shape[1] - 1 or max(rows) == self.shape[0] - 1:
+                bordered.append(i)
+        return np.delete(labels, bordered), np.delete(sizes, bordered)
+    def remove_percentage_max(self, labeled, labels, sizes, p = 0.1):
+        if len(sizes) == 0:
+            return labels, sizes
+        filt = np.argwhere(sizes &lt; p * np.max(sizes))
+        return np.delete(labels, filt), np.delete(sizes, filt)
+    def largest_n_clusters(self, labels, sizes, n = 6):
+        if len(sizes) == 0:
+            return labels, sizes
+        n = min(n, len(labels))
+        a = np.partition(sizes, -n)[-n]
+        return labels[sizes &gt;= a], sizes[sizes &gt;= a]
+
+    def assert_background(self):
+        if self.background is None:
+            self.background = torch.zeros(self.shape, dtype=bool)
+            self.assert_neutral_lines()
+            self.assert_umbra_pumbra()
+
+            #  node = {&#34;COM&#34; : (0, 0), &#34;MASK&#34; : ~(self.nl | self.umbra | self.pumbra)}
+            background = ~(self.nl | self.umbra | self.pumbra)
+            self.segmented[3*NUM_FEATURES:4*NUM_FEATURES] = self.physical_features(background)
+            self.background = background
+
+    def connect_edges(self):
+        self.assert_masks()
+        if not self.graph_edges_declared:
+            for i in range(len(self.node_masks) - 1):
+                for j in range(i + 1, len(self.node_masks)):
+                    if np.count_nonzero(binary_dilation(self.node_masks[i], square(3)) &amp; binary_dilation(self.node_masks[j], square(3))) &gt; 0:
+                        self.G.add_edge(i, j)
+            self.graph_edges_declared = True
+            
+
+    # Tools
+    def moment(self, data):
+        avg = torch.mean(data)
+        std = torch.sqrt(torch.mean((data - avg)**2))
+        skw = torch.mean(((data - avg)/std)**3)
+        krt = torch.mean(((data - avg)/std)**4) - 3.0
+        return torch.tensor([avg, std, skw, krt])
+
+    def norm(self, data):
+        n = 0
+        for i in data:
+            n += torch.abs(i)
+        return n
+
+
+    # Physical Properties
+    def z_moments(self, mask):
+        return self.moment(self.Bz[mask])
+    def phitot(self, mask):
+        return torch.sum(torch.abs(self.Bz[mask]))
+    def phitotabs(self, mask):
+        return torch.abs(torch.sum(self.Bz[mask]))
+    def h_moments(self, mask):
+        self.assert_Bh()
+        return self.moment(self.Bh[mask])
+    def gamma_moments(self, mask):
+        self.assert_gamma()
+        return self.moment(self.gamma[mask])
+    def B_grad_moments(self, mask):
+        self.assert_grad_B()
+        return self.moment(self.norm((self.grad_B_x[mask], self.grad_B_y[mask])))
+    def Bz_grad_moments(self, mask):
+        self.assert_grad_Bz()
+        return self.moment(self.norm((self.grad_Bz_x[mask], self.grad_Bz_y[mask])))
+    def Bh_grad_moments(self, mask):
+        self.assert_grad_Bh()
+        return self.moment(self.norm((self.grad_Bh_x[mask], self.grad_Bh_y[mask])))
+    def J_moments(self, mask):
+        self.assert_J()
+        return self.moment(self.J[mask])
+    def itot(self, mask):
+        self.assert_J()
+        return torch.sum(torch.abs(self.J[mask]))
+    def itotabs(self, mask):
+        self.assert_J()
+        return torch.abs(torch.sum(self.J[mask]))
+    def itot_polarity(self, mask):
+        self.assert_J()
+        return torch.abs(torch.sum(self.J[self.Bz &gt; 0 &amp; mask])) + torch.abs(torch.sum(self.J[self.Bz &lt; 0 &amp; mask]))
+    def Jh_moments(self, mask):
+        self.assert_Jh()
+        return self.moment(self.Jh[mask])
+    def ihtot(self, mask):
+        self.assert_Jh()
+        return torch.sum(torch.abs(self.Jh[mask]))
+    def ihtotabs(self, mask):
+        self.assert_Jh()
+        return torch.abs(torch.sum(self.Jh[mask]))
+    def twist_moments(self, mask):
+        self.assert_J()
+        return self.moment(self.J[mask] / self.Bz[mask])
+    # Too computationally intensive
+    #def twist_force_free_m(self):
+    #    pass
+    def hc_moments(self, mask):
+        self.assert_hc()
+        return self.moment(self.hc[mask])
+    def hctot(self, mask):
+        self.assert_hc()
+        return torch.sum(torch.abs(self.hc[mask]))
+    def hctotabs(self, mask):
+        self.assert_hc()
+        return torch.abs(torch.sum(self.hc[mask]))
+    def shear_moments(self, mask):
+        self.assert_shear() # Pretty big function call right here
+        return self.moment(self.shear[mask])
+    def rho_moments(self, mask):
+        self.assert_rho()
+        return self.moment(self.rho[mask])
+    def totrho(self, mask):
+        self.assert_rho()
+        return torch.sum(self.rho[mask])
+
+
+    # ASSERTIONS - designed so that each component is only calculated ONCE - example: if I want Bh,
+    # simply assert_Bh. If Bh already exists, then nothing is done
+    def assert_Bh(self):
+        if self.Bh is None:
+            self.Bh = self.norm((self.Bx, self.By))
+    def assert_gamma(self):
+        if self.gamma is None:
+            self.assert_Bh()
+            self.gamma = torch.arctan(self.Bz / self.Bh)
+    def assert_B(self):
+        if self.B is None:
+            self.B = self.norm((self.Bx, self.By, self.Bz))
+    def assert_grad_B(self):
+        if self.grad_B_x is None or self.grad_B_y is None:
+            self.assert_B()
+            self.grad_B_x, self.grad_B_y = gradient(self.B)
+    def assert_grad_Bh(self):
+        if self.grad_Bh_x is None or self.grad_Bh_y is None:
+            self.assert_Bh()
+            self.grad_Bh_x, self.grad_Bh_y = gradient(self.Bh)
+    def assert_grad_Bz(self):
+        if self.grad_Bz_x is None or self.grad_Bz_y is None:
+            self.grad_Bz_x, self.grad_Bz_y = gradient(self.Bz)
+    def assert_grad_Bx(self):
+        if self.grad_Bx_x is None or self.grad_Bx_y is None:
+            self.grad_Bx_x, self.grad_Bx_y = gradient(self.Bx)
+            self.grad_Bx_x = -self.grad_Bx_x
+    def assert_grad_By(self):
+        if self.grad_By_x is None or self.grad_By_y is None:
+            self.grad_By_x, self.grad_By_y = gradient(self.By)
+            self.grad_By_x = -self.grad_By_x
+    def assert_grad_Bm(self):
+        if self.grad_Bm is None:
+            self.assert_grad_B()
+            self.grad_Bm = self.norm((self.grad_B_x, self.grad_B_y))
+    def assert_J(self):
+        if self.J is None:
+            self.assert_grad_Bx()
+            self.assert_grad_By()
+            self.J = self.grad_By_x - self.grad_Bx_y
+    def assert_Jh(self):
+        if self.Jh is None:
+            self.assert_grad_Bx()
+            self.assert_grad_By()
+            self.assert_B()
+            self.Jh = (self.By * self.grad_Bx_y - self.Bx * self.grad_By_x) / self.B
+    def assert_hc(self):
+        if self.hc is None:
+            self.assert_J()
+            self.hc = self.Bz * self.J
+    def assert_shear(self):
+        if self.shear is None:
+            self.assert_Bp()
+            self.assert_B()
+            dot = self.Bx * self.Bpx + self.By * self.Bpy + self.Bz * self.Bpz
+            magp = self.norm((self.Bpx, self.Bpy, self.Bpz))
+            self.shear = torch.arccos(dot / (self.B * magp))
+    def assert_rho(self):
+        if self.rho is None:
+            self.assert_Bp()
+            self.rho = (self.B - self.norm((self.Bpx, self.Bpy, self.Bpz)))**2
+    def assert_Bp(self):
+        if self.Bpx is None or self.Bpy is None or self.Bpz is None:
+
+            Bz = F.pad(self.Bz, (radius, radius, radius, radius)).float()
+
+            dz = 0.0001
+            Xmx = Bz.shape[0]
+            Ymx = Bz.shape[1]
+
+            pot = torch.zeros(self.shape, device = dev).float()
+
+            # Distance kernel - a kernel with values filled in the &#34;circle&#34; (by def of norm) as the distance from
+            # the center multiplied by dz (for integration)
+
+            kern = dist_kern.to(dev)
+
+            # Convolution -- integrate over each pixel
+            pot = F.conv2d(Bz[None, None, ...], kern[None, None, ...])[0][0]
+
+            # Save potential
+            self.potential = pot
+
+            # Get Potential Fields
+            self.Bpz = self.Bz
+            grad = gradient(self.potential)
+            self.Bpx, self.Bpy = -grad[0], -grad[1]</code></pre>
+</details>
+<h3>Methods</h3>
+<dl>
+<dt id="flares.active_region.ActiveRegion.B_grad_moments"><code class="name flex">
+<span>def <span class="ident">B_grad_moments</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def B_grad_moments(self, mask):
+    self.assert_grad_B()
+    return self.moment(self.norm((self.grad_B_x[mask], self.grad_B_y[mask])))</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.Bh_grad_moments"><code class="name flex">
+<span>def <span class="ident">Bh_grad_moments</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def Bh_grad_moments(self, mask):
+    self.assert_grad_Bh()
+    return self.moment(self.norm((self.grad_Bh_x[mask], self.grad_Bh_y[mask])))</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.Bz_grad_moments"><code class="name flex">
+<span>def <span class="ident">Bz_grad_moments</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def Bz_grad_moments(self, mask):
+    self.assert_grad_Bz()
+    return self.moment(self.norm((self.grad_Bz_x[mask], self.grad_Bz_y[mask])))</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.J_moments"><code class="name flex">
+<span>def <span class="ident">J_moments</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def J_moments(self, mask):
+    self.assert_J()
+    return self.moment(self.J[mask])</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.Jh_moments"><code class="name flex">
+<span>def <span class="ident">Jh_moments</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def Jh_moments(self, mask):
+    self.assert_Jh()
+    return self.moment(self.Jh[mask])</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.assert_B"><code class="name flex">
+<span>def <span class="ident">assert_B</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assert_B(self):
+    if self.B is None:
+        self.B = self.norm((self.Bx, self.By, self.Bz))</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.assert_Bh"><code class="name flex">
+<span>def <span class="ident">assert_Bh</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assert_Bh(self):
+    if self.Bh is None:
+        self.Bh = self.norm((self.Bx, self.By))</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.assert_Bp"><code class="name flex">
+<span>def <span class="ident">assert_Bp</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assert_Bp(self):
+    if self.Bpx is None or self.Bpy is None or self.Bpz is None:
+
+        Bz = F.pad(self.Bz, (radius, radius, radius, radius)).float()
+
+        dz = 0.0001
+        Xmx = Bz.shape[0]
+        Ymx = Bz.shape[1]
+
+        pot = torch.zeros(self.shape, device = dev).float()
+
+        # Distance kernel - a kernel with values filled in the &#34;circle&#34; (by def of norm) as the distance from
+        # the center multiplied by dz (for integration)
+
+        kern = dist_kern.to(dev)
+
+        # Convolution -- integrate over each pixel
+        pot = F.conv2d(Bz[None, None, ...], kern[None, None, ...])[0][0]
+
+        # Save potential
+        self.potential = pot
+
+        # Get Potential Fields
+        self.Bpz = self.Bz
+        grad = gradient(self.potential)
+        self.Bpx, self.Bpy = -grad[0], -grad[1]</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.assert_J"><code class="name flex">
+<span>def <span class="ident">assert_J</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assert_J(self):
+    if self.J is None:
+        self.assert_grad_Bx()
+        self.assert_grad_By()
+        self.J = self.grad_By_x - self.grad_Bx_y</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.assert_Jh"><code class="name flex">
+<span>def <span class="ident">assert_Jh</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assert_Jh(self):
+    if self.Jh is None:
+        self.assert_grad_Bx()
+        self.assert_grad_By()
+        self.assert_B()
+        self.Jh = (self.By * self.grad_Bx_y - self.Bx * self.grad_By_x) / self.B</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.assert_background"><code class="name flex">
+<span>def <span class="ident">assert_background</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assert_background(self):
+    if self.background is None:
+        self.background = torch.zeros(self.shape, dtype=bool)
+        self.assert_neutral_lines()
+        self.assert_umbra_pumbra()
+
+        #  node = {&#34;COM&#34; : (0, 0), &#34;MASK&#34; : ~(self.nl | self.umbra | self.pumbra)}
+        background = ~(self.nl | self.umbra | self.pumbra)
+        self.segmented[3*NUM_FEATURES:4*NUM_FEATURES] = self.physical_features(background)
+        self.background = background</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.assert_gamma"><code class="name flex">
+<span>def <span class="ident">assert_gamma</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assert_gamma(self):
+    if self.gamma is None:
+        self.assert_Bh()
+        self.gamma = torch.arctan(self.Bz / self.Bh)</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.assert_grad_B"><code class="name flex">
+<span>def <span class="ident">assert_grad_B</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assert_grad_B(self):
+    if self.grad_B_x is None or self.grad_B_y is None:
+        self.assert_B()
+        self.grad_B_x, self.grad_B_y = gradient(self.B)</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.assert_grad_Bh"><code class="name flex">
+<span>def <span class="ident">assert_grad_Bh</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assert_grad_Bh(self):
+    if self.grad_Bh_x is None or self.grad_Bh_y is None:
+        self.assert_Bh()
+        self.grad_Bh_x, self.grad_Bh_y = gradient(self.Bh)</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.assert_grad_Bm"><code class="name flex">
+<span>def <span class="ident">assert_grad_Bm</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assert_grad_Bm(self):
+    if self.grad_Bm is None:
+        self.assert_grad_B()
+        self.grad_Bm = self.norm((self.grad_B_x, self.grad_B_y))</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.assert_grad_Bx"><code class="name flex">
+<span>def <span class="ident">assert_grad_Bx</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assert_grad_Bx(self):
+    if self.grad_Bx_x is None or self.grad_Bx_y is None:
+        self.grad_Bx_x, self.grad_Bx_y = gradient(self.Bx)
+        self.grad_Bx_x = -self.grad_Bx_x</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.assert_grad_By"><code class="name flex">
+<span>def <span class="ident">assert_grad_By</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assert_grad_By(self):
+    if self.grad_By_x is None or self.grad_By_y is None:
+        self.grad_By_x, self.grad_By_y = gradient(self.By)
+        self.grad_By_x = -self.grad_By_x</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.assert_grad_Bz"><code class="name flex">
+<span>def <span class="ident">assert_grad_Bz</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assert_grad_Bz(self):
+    if self.grad_Bz_x is None or self.grad_Bz_y is None:
+        self.grad_Bz_x, self.grad_Bz_y = gradient(self.Bz)</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.assert_hc"><code class="name flex">
+<span>def <span class="ident">assert_hc</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assert_hc(self):
+    if self.hc is None:
+        self.assert_J()
+        self.hc = self.Bz * self.J</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.assert_masks"><code class="name flex">
+<span>def <span class="ident">assert_masks</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assert_masks(self):
+    self.assert_neutral_lines()
+    self.assert_umbra_pumbra()
+    self.assert_background()</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.assert_neutral_lines"><code class="name flex">
+<span>def <span class="ident">assert_neutral_lines</span></span>(<span>self, kernel_radius=1)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assert_neutral_lines(self, kernel_radius = 1):
+    if self.nl is None:
+        # Find neutral Lines
+        thresh = 150
+        nl_mask = binary_dilation(self.Bz &lt; -thresh, square(3)) &amp; binary_dilation(self.Bz &gt; thresh, square(3))
+
+
+        labeled, labels, sizes = self.group_pixels(nl_mask)
+        labels, sizes = self.remove_small_groups(labeled, labels, sizes, 10)
+        labels, sizes = self.remove_percentage_max(labeled, labels, sizes)
+        labels, sizes = self.largest_n_clusters(labels, sizes)
+
+        # Add all the graph nodes
+        nl_mask = np.zeros(self.shape, dtype = bool)
+        cur_node = len(self.node_masks)
+
+        if len(sizes) == 0:
+            self.segmented[0:NUM_FEATURES] = 0
+            self.nl = nl_mask
+            return
+
+        for i in labels:
+            mask = labeled == i
+            self.node_masks = np.concatenate((self.node_masks, mask[None,...]), axis = 0)
+            self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(mask)))
+            self.G.add_node(cur_node)
+            cur_node += 1
+            nl_mask |= mask
+
+        # Compute the segmented data set
+        self.segmented[0:NUM_FEATURES] = self.physical_features(nl_mask)
+        self.nl = nl_mask</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.assert_rho"><code class="name flex">
+<span>def <span class="ident">assert_rho</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assert_rho(self):
+    if self.rho is None:
+        self.assert_Bp()
+        self.rho = (self.B - self.norm((self.Bpx, self.Bpy, self.Bpz)))**2</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.assert_shear"><code class="name flex">
+<span>def <span class="ident">assert_shear</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assert_shear(self):
+    if self.shear is None:
+        self.assert_Bp()
+        self.assert_B()
+        dot = self.Bx * self.Bpx + self.By * self.Bpy + self.Bz * self.Bpz
+        magp = self.norm((self.Bpx, self.Bpy, self.Bpz))
+        self.shear = torch.arccos(dot / (self.B * magp))</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.assert_umbra_pumbra"><code class="name flex">
+<span>def <span class="ident">assert_umbra_pumbra</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def assert_umbra_pumbra(self):
+    if self.pumbra is None or self.umbra is None:
+        cont_bounded = (255 * (self.cont - np.min(self.cont)) / np.ptp(self.cont)).astype(np.uint8)
+
+        block_size = np.min(self.shape)
+        if block_size % 2 == 0:
+            block_size -= 1
+            
+        offset = 10
+        binary_adaptive = cont_bounded &lt; (threshold_local(cont_bounded, block_size, offset = offset) - offset)
+
+        labeled_0, labels, sizes = self.group_pixels(binary_adaptive)
+        labels, sizes = self.remove_small_groups(labeled_0, labels, sizes)
+        labels, sizes = self.remove_bordering_pixels(labeled_0, labels, sizes)
+        labels, sizes = self.remove_percentage_max(labeled_0, labels, sizes)
+        labels, sizes = self.largest_n_clusters(labels, sizes)
+
+        um_mask = np.zeros(self.shape, dtype = bool)
+        pu_mask = np.zeros(self.shape, dtype = bool)
+        cur_node = 0
+
+        if len(sizes) == 0:
+            self.segmented[NUM_FEATURES:2*NUM_FEATURES] = 0
+            self.segmented[2*NUM_FEATURES:3*NUM_FEATURES] = 0
+            self.umbra = um_mask
+            self.pumbra = pu_mask
+            return
+
+        for i in labels:
+            mask = labeled_0 == i
+            mx = np.max(self.cont[mask])
+            mn = np.min(self.cont[mask])
+            t = (mx - mn) / 2 + mn
+            if mx - mn &gt; 21000:
+                # Both umbra and penumbra
+                um = mask &amp; (self.cont &lt;= t)
+                pu = mask &amp; (self.cont &gt; t)
+
+
+                # Further segment the umbra node again
+                labeled, labels, sizes = self.group_pixels(pu)
+                labels, sizes = self.remove_small_groups(labeled, labels, sizes, 10)
+                labels, sizes = self.remove_percentage_max(labeled, labels, sizes)
+                labels, sizes = self.largest_n_clusters(labels, sizes)
+
+                for i in labels:
+                    mask = labeled == i
+                    self.node_masks = np.concatenate((self.node_masks, mask[None,...]), axis = 0)
+                    self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(mask)))
+                    self.G.add_node(cur_node)
+                    cur_node += 1
+                    pu_mask |= mask
+
+                # Further segment the umbra node again
+                labeled, labels, sizes = self.group_pixels(um)
+                labels, sizes = self.remove_small_groups(labeled, labels, sizes, 10)
+                labels, sizes = self.remove_percentage_max(labeled, labels, sizes)
+                labels, sizes = self.largest_n_clusters(labels, sizes)
+
+                for i in labels:
+                    mask = labeled == i
+                    self.node_masks = np.concatenate((self.node_masks, mask[None,...]), axis = 0)
+                    self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(mask)))
+                    self.G.add_node(cur_node)
+                    cur_node += 1
+                    um_mask |= mask
+
+            else:
+                # Only umbra
+                um = mask &amp; (self.cont &lt;= t)
+                self.node_masks = np.concatenate((self.node_masks, um[None,...]), axis = 0)
+                self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(um)))
+                self.G.add_node(cur_node)
+                cur_node += 1
+                um_mask |= um
+        
+        # Compute the segmented data set
+        self.segmented[NUM_FEATURES:2*NUM_FEATURES] = self.physical_features(um_mask)
+        self.segmented[2*NUM_FEATURES:3*NUM_FEATURES] = self.physical_features(pu_mask)
+        self.umbra = um_mask
+        self.pumbra = pu_mask</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.come_back_from_gpu"><code class="name flex">
+<span>def <span class="ident">come_back_from_gpu</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def come_back_from_gpu(self):
+    self.Bz = self.Bz.detach().cpu().numpy()
+    self.Bx = self.Bx.detach().cpu().numpy()
+    self.By = self.By.detach().cpu().numpy()
+    self.cont = self.cont.detach().cpu().numpy()</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.connect_edges"><code class="name flex">
+<span>def <span class="ident">connect_edges</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def connect_edges(self):
+    self.assert_masks()
+    if not self.graph_edges_declared:
+        for i in range(len(self.node_masks) - 1):
+            for j in range(i + 1, len(self.node_masks)):
+                if np.count_nonzero(binary_dilation(self.node_masks[i], square(3)) &amp; binary_dilation(self.node_masks[j], square(3))) &gt; 0:
+                    self.G.add_edge(i, j)
+        self.graph_edges_declared = True</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.gamma_moments"><code class="name flex">
+<span>def <span class="ident">gamma_moments</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def gamma_moments(self, mask):
+    self.assert_gamma()
+    return self.moment(self.gamma[mask])</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.group_pixels"><code class="name flex">
+<span>def <span class="ident">group_pixels</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def group_pixels(self, mask):
+    labeled = label(mask, connectivity = 2)
+    labels = np.unique(labeled)[1:]
+    sizes = np.array([np.count_nonzero(labeled==i) for i in labels])
+    return labeled, labels, sizes</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.h_moments"><code class="name flex">
+<span>def <span class="ident">h_moments</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def h_moments(self, mask):
+    self.assert_Bh()
+    return self.moment(self.Bh[mask])</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.hc_moments"><code class="name flex">
+<span>def <span class="ident">hc_moments</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def hc_moments(self, mask):
+    self.assert_hc()
+    return self.moment(self.hc[mask])</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.hctot"><code class="name flex">
+<span>def <span class="ident">hctot</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def hctot(self, mask):
+    self.assert_hc()
+    return torch.sum(torch.abs(self.hc[mask]))</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.hctotabs"><code class="name flex">
+<span>def <span class="ident">hctotabs</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def hctotabs(self, mask):
+    self.assert_hc()
+    return torch.abs(torch.sum(self.hc[mask]))</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.ihtot"><code class="name flex">
+<span>def <span class="ident">ihtot</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def ihtot(self, mask):
+    self.assert_Jh()
+    return torch.sum(torch.abs(self.Jh[mask]))</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.ihtotabs"><code class="name flex">
+<span>def <span class="ident">ihtotabs</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def ihtotabs(self, mask):
+    self.assert_Jh()
+    return torch.abs(torch.sum(self.Jh[mask]))</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.itot"><code class="name flex">
+<span>def <span class="ident">itot</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def itot(self, mask):
+    self.assert_J()
+    return torch.sum(torch.abs(self.J[mask]))</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.itot_polarity"><code class="name flex">
+<span>def <span class="ident">itot_polarity</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def itot_polarity(self, mask):
+    self.assert_J()
+    return torch.abs(torch.sum(self.J[self.Bz &gt; 0 &amp; mask])) + torch.abs(torch.sum(self.J[self.Bz &lt; 0 &amp; mask]))</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.itotabs"><code class="name flex">
+<span>def <span class="ident">itotabs</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def itotabs(self, mask):
+    self.assert_J()
+    return torch.abs(torch.sum(self.J[mask]))</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.largest_n_clusters"><code class="name flex">
+<span>def <span class="ident">largest_n_clusters</span></span>(<span>self, labels, sizes, n=6)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def largest_n_clusters(self, labels, sizes, n = 6):
+    if len(sizes) == 0:
+        return labels, sizes
+    n = min(n, len(labels))
+    a = np.partition(sizes, -n)[-n]
+    return labels[sizes &gt;= a], sizes[sizes &gt;= a]</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.moment"><code class="name flex">
+<span>def <span class="ident">moment</span></span>(<span>self, data)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def moment(self, data):
+    avg = torch.mean(data)
+    std = torch.sqrt(torch.mean((data - avg)**2))
+    skw = torch.mean(((data - avg)/std)**3)
+    krt = torch.mean(((data - avg)/std)**4) - 3.0
+    return torch.tensor([avg, std, skw, krt])</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.norm"><code class="name flex">
+<span>def <span class="ident">norm</span></span>(<span>self, data)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def norm(self, data):
+    n = 0
+    for i in data:
+        n += torch.abs(i)
+    return n</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.phitot"><code class="name flex">
+<span>def <span class="ident">phitot</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def phitot(self, mask):
+    return torch.sum(torch.abs(self.Bz[mask]))</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.phitotabs"><code class="name flex">
+<span>def <span class="ident">phitotabs</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def phitotabs(self, mask):
+    return torch.abs(torch.sum(self.Bz[mask]))</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.physical_features"><code class="name flex">
+<span>def <span class="ident">physical_features</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Extracts the physical fetures from the active region.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>mask</code></strong> :&ensp;<code>Numpy boolean Array</code> of <code>the same shape as self</code></dt>
+<dd>A mask (subset) of self to extract physical </dd>
+</dl>
+<p>features on. ie, which pixels of self should this function compute</p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>1 dimensional Numpy array</code></dt>
+<dd>an array with all of the physical features computed on the subset provided by mask</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def physical_features(self, mask):
+    &#34;&#34;&#34;Extracts the physical fetures from the active region.
+
+    Args:
+        mask (Numpy boolean Array of the same shape as self): A mask (subset) of self to extract physical 
+        features on. ie, which pixels of self should this function compute
+
+    Returns:
+        1 dimensional Numpy array: an array with all of the physical features computed on the subset provided by mask
+    &#34;&#34;&#34;
+    mask = torch.from_numpy(mask).to(dev)
+    self.switch_to_gpu()
+
+    moment_features = torch.tensor([
+        *self.z_moments(mask), \
+        *self.h_moments(mask), \
+        *self.gamma_moments(mask), \
+        *self.B_grad_moments(mask), \
+        *self.Bz_grad_moments(mask), \
+        *self.Bh_grad_moments(mask), \
+        *self.J_moments(mask), \
+        *self.Jh_moments(mask), \
+        *self.twist_moments(mask), \
+        *self.hc_moments(mask), \
+        *self.shear_moments(mask), \
+        *self.rho_moments(mask)
+        ])
+    val = torch.tensor([
+        self.phitot(mask), \
+        self.phitotabs(mask), \
+        self.itot(mask), \
+        self.itotabs(mask), \
+        self.hctot(mask), \
+        self.hctotabs(mask), \
+        self.totrho(mask), \
+        *moment_features
+        ])
+    self.come_back_from_gpu()
+    mask = mask.detach().cpu().numpy()
+    return val</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.remove_bordering_pixels"><code class="name flex">
+<span>def <span class="ident">remove_bordering_pixels</span></span>(<span>self, labeled, labels, sizes)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def remove_bordering_pixels(self, labeled, labels, sizes):
+    if len(sizes) == 0:
+        return labels, sizes
+    bordered = []
+    for i in range(len(labels)):
+        rows, cols = np.where(labeled == labels[i])
+        if min(rows) == 0 or min(cols) == 0:
+            bordered.append(i)
+        if max(cols) == self.shape[1] - 1 or max(rows) == self.shape[0] - 1:
+            bordered.append(i)
+    return np.delete(labels, bordered), np.delete(sizes, bordered)</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.remove_percentage_max"><code class="name flex">
+<span>def <span class="ident">remove_percentage_max</span></span>(<span>self, labeled, labels, sizes, p=0.1)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def remove_percentage_max(self, labeled, labels, sizes, p = 0.1):
+    if len(sizes) == 0:
+        return labels, sizes
+    filt = np.argwhere(sizes &lt; p * np.max(sizes))
+    return np.delete(labels, filt), np.delete(sizes, filt)</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.remove_small_groups"><code class="name flex">
+<span>def <span class="ident">remove_small_groups</span></span>(<span>self, labeled, labels, sizes, p=500)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def remove_small_groups(self, labeled, labels, sizes, p = 500):
+    if len(sizes) == 0:
+        return labels, sizes
+    filt = np.argwhere((sizes &lt; p))
+    return np.delete(labels, filt), np.delete(sizes, filt)</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.rho_moments"><code class="name flex">
+<span>def <span class="ident">rho_moments</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def rho_moments(self, mask):
+    self.assert_rho()
+    return self.moment(self.rho[mask])</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.shear_moments"><code class="name flex">
+<span>def <span class="ident">shear_moments</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def shear_moments(self, mask):
+    self.assert_shear() # Pretty big function call right here
+    return self.moment(self.shear[mask])</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.switch_to_gpu"><code class="name flex">
+<span>def <span class="ident">switch_to_gpu</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def switch_to_gpu(self):
+    self.Bz = torch.from_numpy(self.Bz).to(dev)
+    self.Bx = torch.from_numpy(self.Bx).to(dev)
+    self.By = torch.from_numpy(self.By).to(dev)
+    self.cont = torch.from_numpy(self.cont).to(dev)</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.totrho"><code class="name flex">
+<span>def <span class="ident">totrho</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def totrho(self, mask):
+    self.assert_rho()
+    return torch.sum(self.rho[mask])</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.twist_moments"><code class="name flex">
+<span>def <span class="ident">twist_moments</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def twist_moments(self, mask):
+    self.assert_J()
+    return self.moment(self.J[mask] / self.Bz[mask])</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.z_moments"><code class="name flex">
+<span>def <span class="ident">z_moments</span></span>(<span>self, mask)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def z_moments(self, mask):
+    return self.moment(self.Bz[mask])</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+</dl>
+</section>
+</article>
+<nav id="sidebar">
+<h1>Index</h1>
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="flares" href="index.html">flares</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-classes">Classes</a></h3>
+<ul>
+<li>
+<h4><code><a title="flares.active_region.ActiveRegion" href="#flares.active_region.ActiveRegion">ActiveRegion</a></code></h4>
+<ul class="">
+<li><code><a title="flares.active_region.ActiveRegion.B_grad_moments" href="#flares.active_region.ActiveRegion.B_grad_moments">B_grad_moments</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.Bh_grad_moments" href="#flares.active_region.ActiveRegion.Bh_grad_moments">Bh_grad_moments</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.Bz_grad_moments" href="#flares.active_region.ActiveRegion.Bz_grad_moments">Bz_grad_moments</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.J_moments" href="#flares.active_region.ActiveRegion.J_moments">J_moments</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.Jh_moments" href="#flares.active_region.ActiveRegion.Jh_moments">Jh_moments</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.assert_B" href="#flares.active_region.ActiveRegion.assert_B">assert_B</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.assert_Bh" href="#flares.active_region.ActiveRegion.assert_Bh">assert_Bh</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.assert_Bp" href="#flares.active_region.ActiveRegion.assert_Bp">assert_Bp</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.assert_J" href="#flares.active_region.ActiveRegion.assert_J">assert_J</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.assert_Jh" href="#flares.active_region.ActiveRegion.assert_Jh">assert_Jh</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.assert_background" href="#flares.active_region.ActiveRegion.assert_background">assert_background</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.assert_gamma" href="#flares.active_region.ActiveRegion.assert_gamma">assert_gamma</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.assert_grad_B" href="#flares.active_region.ActiveRegion.assert_grad_B">assert_grad_B</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.assert_grad_Bh" href="#flares.active_region.ActiveRegion.assert_grad_Bh">assert_grad_Bh</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.assert_grad_Bm" href="#flares.active_region.ActiveRegion.assert_grad_Bm">assert_grad_Bm</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.assert_grad_Bx" href="#flares.active_region.ActiveRegion.assert_grad_Bx">assert_grad_Bx</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.assert_grad_By" href="#flares.active_region.ActiveRegion.assert_grad_By">assert_grad_By</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.assert_grad_Bz" href="#flares.active_region.ActiveRegion.assert_grad_Bz">assert_grad_Bz</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.assert_hc" href="#flares.active_region.ActiveRegion.assert_hc">assert_hc</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.assert_masks" href="#flares.active_region.ActiveRegion.assert_masks">assert_masks</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.assert_neutral_lines" href="#flares.active_region.ActiveRegion.assert_neutral_lines">assert_neutral_lines</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.assert_rho" href="#flares.active_region.ActiveRegion.assert_rho">assert_rho</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.assert_shear" href="#flares.active_region.ActiveRegion.assert_shear">assert_shear</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.assert_umbra_pumbra" href="#flares.active_region.ActiveRegion.assert_umbra_pumbra">assert_umbra_pumbra</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.come_back_from_gpu" href="#flares.active_region.ActiveRegion.come_back_from_gpu">come_back_from_gpu</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.connect_edges" href="#flares.active_region.ActiveRegion.connect_edges">connect_edges</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.gamma_moments" href="#flares.active_region.ActiveRegion.gamma_moments">gamma_moments</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.group_pixels" href="#flares.active_region.ActiveRegion.group_pixels">group_pixels</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.h_moments" href="#flares.active_region.ActiveRegion.h_moments">h_moments</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.hc_moments" href="#flares.active_region.ActiveRegion.hc_moments">hc_moments</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.hctot" href="#flares.active_region.ActiveRegion.hctot">hctot</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.hctotabs" href="#flares.active_region.ActiveRegion.hctotabs">hctotabs</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.ihtot" href="#flares.active_region.ActiveRegion.ihtot">ihtot</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.ihtotabs" href="#flares.active_region.ActiveRegion.ihtotabs">ihtotabs</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.itot" href="#flares.active_region.ActiveRegion.itot">itot</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.itot_polarity" href="#flares.active_region.ActiveRegion.itot_polarity">itot_polarity</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.itotabs" href="#flares.active_region.ActiveRegion.itotabs">itotabs</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.largest_n_clusters" href="#flares.active_region.ActiveRegion.largest_n_clusters">largest_n_clusters</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.moment" href="#flares.active_region.ActiveRegion.moment">moment</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.norm" href="#flares.active_region.ActiveRegion.norm">norm</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.phitot" href="#flares.active_region.ActiveRegion.phitot">phitot</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.phitotabs" href="#flares.active_region.ActiveRegion.phitotabs">phitotabs</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.physical_features" href="#flares.active_region.ActiveRegion.physical_features">physical_features</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.remove_bordering_pixels" href="#flares.active_region.ActiveRegion.remove_bordering_pixels">remove_bordering_pixels</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.remove_percentage_max" href="#flares.active_region.ActiveRegion.remove_percentage_max">remove_percentage_max</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.remove_small_groups" href="#flares.active_region.ActiveRegion.remove_small_groups">remove_small_groups</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.rho_moments" href="#flares.active_region.ActiveRegion.rho_moments">rho_moments</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.shear_moments" href="#flares.active_region.ActiveRegion.shear_moments">shear_moments</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.switch_to_gpu" href="#flares.active_region.ActiveRegion.switch_to_gpu">switch_to_gpu</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.totrho" href="#flares.active_region.ActiveRegion.totrho">totrho</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.twist_moments" href="#flares.active_region.ActiveRegion.twist_moments">twist_moments</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.z_moments" href="#flares.active_region.ActiveRegion.z_moments">z_moments</a></code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.10.0</a>.</p>
+</footer>
+</body>
+</html>

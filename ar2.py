@@ -28,6 +28,14 @@ dev = torch.device("cpu")
 
 ###### UTILITIES
 def norm(data):
+    """Summary here
+
+    Args:
+        data (array): tool
+
+    Returns:
+        thingy: thing mab
+    """
     n = 0
     for i in data:
         n += np.abs(i)

@@ -6,6 +6,10 @@ from astropy.io import fits
 ###### DATA
 # Get a list of dates active for a specific harpnumber
 def get_dates(harpnum, root, sort = False):
+
+    """
+    $$\\theta = 5x + \\frac{1}{\\exp{53}}$$
+    """
     base = os.path.join(root, "magnetogram", "sharp_" + str(harpnum))
     assert os.path.exists(base)
     ret = []
