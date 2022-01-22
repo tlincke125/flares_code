@@ -31,13 +31,21 @@
 import os
 import re
 from astropy.io import fits
+import numpy as np
+
+# If set to true, includes the sharps features errors
+# as well as the physical values
+INCLUDE_ERRORS = True
 
 ###### DATA
 # Get a list of dates active for a specific harpnumber
 def get_dates(harpnum, root, sort = False):
-
-    &#34;&#34;&#34;
-    $$\\theta = 5x + \\frac{1}{\\exp{53}}$$
+    &#34;&#34;&#34;Extracts dates of a specified harpnumber
+    
+    Args:
+        harpnum (int): The harpnumber
+        root (string): The root file directory (see ActiveRegion for a description)
+        sort (bool): If true, sorts by date, otherwise just grabs the way they are sorted in memory
     &#34;&#34;&#34;
     base = os.path.join(root, &#34;magnetogram&#34;, &#34;sharp_&#34; + str(harpnum))
     assert os.path.exists(base)
@@ -51,22 +59,76 @@ def get_dates(harpnum, root, sort = False):
             ret.append(datetime.strptime(match.group(&#34;date&#34;), &#34;%Y%m%d_%H%M%S&#34;))
     return sorted(ret) if sort else ret
 
+sharps_features = [ &#34;USFLUX&#34;,\
+                    &#34;MEANGAM&#34;,\
+                    &#34;MEANGBT&#34;,\
+                    &#34;MEANGBZ&#34;,\
+                    &#34;MEANGBH&#34;,\
+                    &#34;MEANJZD&#34;,\
+                    &#34;TOTUSJZ&#34;,\
+                    &#34;MEANALP&#34;,\
+                    &#34;MEANJZH&#34;,\
+                    &#34;TOTUSJH&#34;,\
+                    &#34;ABSNJZH&#34;,\
+                    &#34;SAVNCPP&#34;,\
+                    &#34;MEANPOT&#34;,\
+                    &#34;TOTPOT&#34;,\
+                    &#34;MEANSHR&#34;,\
+                    &#34;SHRGT45&#34;]
 
-def get_data(harpnum, date, root, nantozero = False):
+sharps_features_errors = [&#34;ERRVF&#34;,\
+                    &#34;ERRGAM&#34;,\
+                    &#34;ERRBT&#34;,\
+                    &#34;ERRBZ&#34;,\
+                    &#34;ERRBH&#34;,\
+                    &#34;ERRJZ&#34;,\
+                    &#34;ERRUSI&#34;,\
+                    &#34;ERRALP&#34;,\
+                    &#34;ERRMIH&#34;,\
+                    &#34;ERRUSI&#34;,\
+                    &#34;ERRTAI&#34;,\
+                    &#34;ERRJHT&#34;,\
+                    &#34;ERRMPOT&#34;,\
+                    &#34;ERRTPOT&#34;,\
+                    &#34;ERRMSHA&#34;]
+
+if INCLUDE_ERRORS:
+    sharps_features += sharps_features_errors
+
+def get_data(harpnum, date, root):
+    &#34;&#34;&#34;Gets data from root for harpnumber date
+
+    Args:
+        harpnum (int): The harpnumber to extract
+        date (datetime): The date
+        root (str): The root of the folders (see ActiveRegion)
+
+    Returns:
+        dict: {&#34;Bz&#34; : , &#34;By&#34; : , &#34;Bx&#34; : , &#34;cont&#34; : , &#34;sharp&#34; : }
+        &#34;sharp&#34; is the default header values (16 of them or 32 if including errors) - see Varad&#39;s paper or read
+        JSOC documentation for a reference
+    &#34;&#34;&#34;
     date_str = date.strftime(&#34;%Y%m%d_%H%M%S&#34;)
 
     files = [(&#34;magnetogram&#34;, &#34;Br&#34;), (&#34;magnetogram&#34;, &#34;Bt&#34;), (&#34;magnetogram&#34;, &#34;Bp&#34;), (&#34;continuum&#34;, &#34;continuum&#34;)]
     data = []
+    sharps = {}
+
     for f1, f2 in files:
         filename = os.path.join(root, f1, f&#34;sharp_{harpnum}&#34;, f&#34;hmi.sharp_cea_720s.{harpnum}.{date_str}_TAI.{f2}.fits&#34;)
         assert os.path.isfile(filename)
         with fits.open(filename) as hdul:
-            #  hdul.verify(&#39;fix&#39;)
-            d = np.rot90(hdul[1].data).copy()
-            if nantozero:
-                d = np.nan_to_num(d, 0.01)
-            data.append(d)
-    return data</code></pre>
+
+            # Gather sharps info
+            if f2 == &#34;Br&#34;:
+                for label in sharps_features:
+                    sharps[label] = np.float(hdul[1].header[label])
+            
+            # Add to array
+            data.append(np.array(hdul[1].data))
+    
+    ret = {&#34;Bz&#34; : data[0], &#34;By&#34; : data[1], &#34;Bx&#34; : data[2], &#34;cont&#34; : data[3], &#34;sharps&#34; : sharps}
+    return ret</code></pre>
 </details>
 </section>
 <section>
@@ -77,44 +139,91 @@ def get_data(harpnum, date, root, nantozero = False):
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="flares.data.get_data"><code class="name flex">
-<span>def <span class="ident">get_data</span></span>(<span>harpnum, date, root, nantozero=False)</span>
+<span>def <span class="ident">get_data</span></span>(<span>harpnum, date, root)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Gets data from root for harpnumber date</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>harpnum</code></strong> :&ensp;<code>int</code></dt>
+<dd>The harpnumber to extract</dd>
+<dt><strong><code>date</code></strong> :&ensp;<code>datetime</code></dt>
+<dd>The date</dd>
+<dt><strong><code>root</code></strong> :&ensp;<code>str</code></dt>
+<dd>The root of the folders (see ActiveRegion)</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>dict</code></dt>
+<dd>{"Bz" : , "By" : , "Bx" : , "cont" : , "sharp" : }</dd>
+</dl>
+<p>"sharp" is the default header values (16 of them or 32 if including errors) - see Varad's paper or read
+JSOC documentation for a reference</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def get_data(harpnum, date, root, nantozero = False):
+<pre><code class="python">def get_data(harpnum, date, root):
+    &#34;&#34;&#34;Gets data from root for harpnumber date
+
+    Args:
+        harpnum (int): The harpnumber to extract
+        date (datetime): The date
+        root (str): The root of the folders (see ActiveRegion)
+
+    Returns:
+        dict: {&#34;Bz&#34; : , &#34;By&#34; : , &#34;Bx&#34; : , &#34;cont&#34; : , &#34;sharp&#34; : }
+        &#34;sharp&#34; is the default header values (16 of them or 32 if including errors) - see Varad&#39;s paper or read
+        JSOC documentation for a reference
+    &#34;&#34;&#34;
     date_str = date.strftime(&#34;%Y%m%d_%H%M%S&#34;)
 
     files = [(&#34;magnetogram&#34;, &#34;Br&#34;), (&#34;magnetogram&#34;, &#34;Bt&#34;), (&#34;magnetogram&#34;, &#34;Bp&#34;), (&#34;continuum&#34;, &#34;continuum&#34;)]
     data = []
+    sharps = {}
+
     for f1, f2 in files:
         filename = os.path.join(root, f1, f&#34;sharp_{harpnum}&#34;, f&#34;hmi.sharp_cea_720s.{harpnum}.{date_str}_TAI.{f2}.fits&#34;)
         assert os.path.isfile(filename)
         with fits.open(filename) as hdul:
-            #  hdul.verify(&#39;fix&#39;)
-            d = np.rot90(hdul[1].data).copy()
-            if nantozero:
-                d = np.nan_to_num(d, 0.01)
-            data.append(d)
-    return data</code></pre>
+
+            # Gather sharps info
+            if f2 == &#34;Br&#34;:
+                for label in sharps_features:
+                    sharps[label] = np.float(hdul[1].header[label])
+            
+            # Add to array
+            data.append(np.array(hdul[1].data))
+    
+    ret = {&#34;Bz&#34; : data[0], &#34;By&#34; : data[1], &#34;Bx&#34; : data[2], &#34;cont&#34; : data[3], &#34;sharps&#34; : sharps}
+    return ret</code></pre>
 </details>
 </dd>
 <dt id="flares.data.get_dates"><code class="name flex">
 <span>def <span class="ident">get_dates</span></span>(<span>harpnum, root, sort=False)</span>
 </code></dt>
 <dd>
-<div class="desc"><p><span><span class="MathJax_Preview">\theta = 5x + \frac{1}{\exp{53}}</span><script type="math/tex; mode=display">\theta = 5x + \frac{1}{\exp{53}}</script></span></p></div>
+<div class="desc"><p>Extracts dates of a specified harpnumber</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>harpnum</code></strong> :&ensp;<code>int</code></dt>
+<dd>The harpnumber</dd>
+<dt><strong><code>root</code></strong> :&ensp;<code>string</code></dt>
+<dd>The root file directory (see ActiveRegion for a description)</dd>
+<dt><strong><code>sort</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If true, sorts by date, otherwise just grabs the way they are sorted in memory</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def get_dates(harpnum, root, sort = False):
-
-    &#34;&#34;&#34;
-    $$\\theta = 5x + \\frac{1}{\\exp{53}}$$
+    &#34;&#34;&#34;Extracts dates of a specified harpnumber
+    
+    Args:
+        harpnum (int): The harpnumber
+        root (string): The root file directory (see ActiveRegion for a description)
+        sort (bool): If true, sorts by date, otherwise just grabs the way they are sorted in memory
     &#34;&#34;&#34;
     base = os.path.join(root, &#34;magnetogram&#34;, &#34;sharp_&#34; + str(harpnum))
     assert os.path.exists(base)

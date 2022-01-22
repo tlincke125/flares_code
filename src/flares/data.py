@@ -2,13 +2,21 @@ from datetime import datetime
 import os
 import re
 from astropy.io import fits
+import numpy as np
+
+# If set to true, includes the sharps features errors
+# as well as the physical values
+INCLUDE_ERRORS = True
 
 ###### DATA
 # Get a list of dates active for a specific harpnumber
 def get_dates(harpnum, root, sort = False):
-
-    """
-    $$\\theta = 5x + \\frac{1}{\\exp{53}}$$
+    """Extracts dates of a specified harpnumber
+    
+    Args:
+        harpnum (int): The harpnumber
+        root (string): The root file directory (see ActiveRegion for a description)
+        sort (bool): If true, sorts by date, otherwise just grabs the way they are sorted in memory
     """
     base = os.path.join(root, "magnetogram", "sharp_" + str(harpnum))
     assert os.path.exists(base)
@@ -22,19 +30,73 @@ def get_dates(harpnum, root, sort = False):
             ret.append(datetime.strptime(match.group("date"), "%Y%m%d_%H%M%S"))
     return sorted(ret) if sort else ret
 
+sharps_features = [ "USFLUX",\
+                    "MEANGAM",\
+                    "MEANGBT",\
+                    "MEANGBZ",\
+                    "MEANGBH",\
+                    "MEANJZD",\
+                    "TOTUSJZ",\
+                    "MEANALP",\
+                    "MEANJZH",\
+                    "TOTUSJH",\
+                    "ABSNJZH",\
+                    "SAVNCPP",\
+                    "MEANPOT",\
+                    "TOTPOT",\
+                    "MEANSHR",\
+                    "SHRGT45"]
 
-def get_data(harpnum, date, root, nantozero = False):
+sharps_features_errors = ["ERRVF",\
+                    "ERRGAM",\
+                    "ERRBT",\
+                    "ERRBZ",\
+                    "ERRBH",\
+                    "ERRJZ",\
+                    "ERRUSI",\
+                    "ERRALP",\
+                    "ERRMIH",\
+                    "ERRUSI",\
+                    "ERRTAI",\
+                    "ERRJHT",\
+                    "ERRMPOT",\
+                    "ERRTPOT",\
+                    "ERRMSHA"]
+
+if INCLUDE_ERRORS:
+    sharps_features += sharps_features_errors
+
+def get_data(harpnum, date, root):
+    """Gets data from root for harpnumber date
+
+    Args:
+        harpnum (int): The harpnumber to extract
+        date (datetime): The date
+        root (str): The root of the folders (see ActiveRegion)
+
+    Returns:
+        dict: {"Bz" : , "By" : , "Bx" : , "cont" : , "sharp" : }
+        "sharp" is the default header values (16 of them or 32 if including errors) - see Varad's paper or read
+        JSOC documentation for a reference
+    """
     date_str = date.strftime("%Y%m%d_%H%M%S")
 
     files = [("magnetogram", "Br"), ("magnetogram", "Bt"), ("magnetogram", "Bp"), ("continuum", "continuum")]
     data = []
+    sharps = {}
+
     for f1, f2 in files:
         filename = os.path.join(root, f1, f"sharp_{harpnum}", f"hmi.sharp_cea_720s.{harpnum}.{date_str}_TAI.{f2}.fits")
         assert os.path.isfile(filename)
         with fits.open(filename) as hdul:
-            #  hdul.verify('fix')
-            d = np.rot90(hdul[1].data).copy()
-            if nantozero:
-                d = np.nan_to_num(d, 0.01)
-            data.append(d)
-    return data
+
+            # Gather sharps info
+            if f2 == "Br":
+                for label in sharps_features:
+                    sharps[label] = np.float(hdul[1].header[label])
+            
+            # Add to array
+            data.append(np.array(hdul[1].data))
+    
+    ret = {"Bz" : data[0], "By" : data[1], "Bx" : data[2], "cont" : data[3], "sharps" : sharps}
+    return ret

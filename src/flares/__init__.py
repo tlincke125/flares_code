@@ -1,4 +1,4 @@
 """
 .. include::README.md
 """
-__docformat__ = "restructuredtext"
+__docformat__ = "numpy"

@@ -29,11 +29,13 @@
 </summary>
 <pre><code class="python">from pathlib import Path
 import sys
+
 path_root = Path(__file__).parents[2]
 sys.path.append(str(path_root))
 
 from flares.utils import *
 from flares.data import *
+from flares.fields import ActiveRegionParameters
 
 import torch
 import torch.nn.functional as F
@@ -43,34 +45,67 @@ import numpy as np
 import networkx as nx
 import warnings
 
-from scipy.stats import skew
 from skimage.filters import threshold_local
 from skimage.morphology import square
 from skimage.measure import label
+import matplotlib.pyplot as plt
 
 
-NUM_FEATURES = 55
-GRAPH_EMB_SIZE = 128
 
+class ActiveRegion(ActiveRegionParameters):
+    def __init__(self, hnum: int, date: datetime, root: str):
+        &#34;&#34;&#34;An Active Region is an entry point into 
+        parameterization, segmentation, and graph methods. 
 
-# Feature Library
-class ActiveRegion:
-    def __init__(self, hnum: int, date: str, root: str):
-        &#34;&#34;&#34;An Active Region is an entry point into physical features for 
-        parameterization, segmentation, and graph methods. If the specified
-        (hnum, date) active region contains a nan, self.valid turns to false
-        and subsequent calls to ActiveRegion methods may fail given the existence
-        of nans
+        An Active Region is uniquely determined by it&#39;s harpnumber (hnum) and date (date)
+        If the specified active region given (hnum, date) contains a nan, self.valid is False
+        (otherwise self.valid is True) and subsequent calls to ActiveRegion methods may fail 
+        given the existence of nans. Check status of the active region by self.valid.
+        The existence of nan&#39;s implies the image is moving off the solar limb. This is an issue that
+        could be turned into a ticket and fixed, but for the time being I am ignoring these images
+
+        Magnetograms and continuums must be organized by the following standard (with root as the root)
+        (This standard may be loosened in the future and subsequent documentation will change)
+
+        - root
+            - magnetogram
+                - sharp_&lt;hnum&gt;
+                    - hmi.sharp_cea_720s.&lt;hnum&gt;.&lt;year&gt;&lt;month&gt;&lt;day&gt;_&lt;hour&gt;&lt;minute&gt;&lt;second&gt;_TAI.Bp.fits
+                    - hmi.sharp_cea_720s.&lt;hnum&gt;.&lt;year&gt;&lt;month&gt;&lt;day&gt;_&lt;hour&gt;&lt;minute&gt;&lt;second&gt;_TAI.Br.fits
+                    - hmi.sharp_cea_720s.&lt;hnum&gt;.&lt;year&gt;&lt;month&gt;&lt;day&gt;_&lt;hour&gt;&lt;minute&gt;&lt;second&gt;_TAI.Bt.fits
+            - continuum
+                - sharp_&lt;hnum&gt;
+                    - hmi.sharp_cea_720s.&lt;hnum&gt;.&lt;year&gt;&lt;month&gt;&lt;day&gt;_&lt;hour&gt;&lt;minute&gt;&lt;second&gt;_TAI.continuum.fits
+        
+        So for example, (this will work on Swami), a new active region call:
+        ```python
+        ActiveRegion(7115, datetime(2017, 9, 3, 10), &#34;/srv/data/thli2739&#34;) 
+        ```
+
+        Would **require** the following files or symlinks to exist:
+
+        - /srv/data/thli2739
+            - /magnetogram
+                - /sharp_7115
+                    - /hmi.sharp_cea_720s.7115.20170903_100000_TAI.Bp.fits
+                    - /hmi.sharp_cea_720s.7115.20170903_100000_TAI.Br.fits
+                    - /hmi.sharp_cea_720s.7115.20170903_100000_TAI.Bt.fits
+            - /continuum
+                - /sharp_7115
+                    - /hmi.sharp_cea_720s.7115.20170903_100000_TAI.continuum.fits
 
         Args:
-            hnum (int): The specified harpnumber - file must exist in root/magnetogram/sharp_{hnum} 
+            hnum (int): The specified harpnumber - file must exist in root/magnetogram/sharp_{hnum} and root/continuum/sharp_{hnum}
             date (datetime): The specified active region date and time - this date must exist in the specified harpnumber data folder 
-            root (asdkln): The path to the data. Root must be a directory that holds both root/magnetogram and root/continuum. Inside both
+            root (string): The path to the data. Root must be a directory that holds both root/magnetogram and root/continuum. Inside both
             of these subfolders, there must be a series of folders labeled sharp_{hnum} that contain the sequence of fits files for extraction
         &#34;&#34;&#34;
     
         # Generate xyz components of magnetic field and continuum
-        self.Bz, self.Bx, self.By, self.cont = get_data(hnum, date, root)
+        data = get_data(hnum, date, root)
+
+        self.Bz, self.Bx, self.By, self.cont = data[&#34;Bz&#34;], data[&#34;Bx&#34;], data[&#34;By&#34;], data[&#34;cont&#34;]
+        
         self.shape = self.Bz.shape
         self.valid = True # Valid is false
 
@@ -79,153 +114,243 @@ class ActiveRegion:
             warnings.warn(f&#34;Hnum {hnum} date {date} has a nan, skipping&#34;)
             return
 
-        
         # To prevent nan&#39;s popping up do to small numbers,
         # cut everything below minimum val to minimum val
-        minimum_val = 0.01
+        minimum_val = 0.001
         self.Bz[np.abs(self.Bz) &lt; minimum_val] = minimum_val
         self.Bx[np.abs(self.Bx) &lt; minimum_val] = minimum_val
         self.By[np.abs(self.By) &lt; minimum_val] = minimum_val
 
+        # Now Bx By Bz are defined so generate the parameter class
+        super().__init__(self.Bz, self.By, self.Bx)
 
-        # All the fields / features
-        self.Bh = None
-        self.gamma = None
-        self.B = None
-        self.grad_B_x = None
-        self.grad_B_y = None
-        self.grad_Bh_x = None
-        self.grad_Bh_y = None
-        self.grad_Bz_x = None
-        self.grad_Bz_y = None
-        self.grad_Bx_x = None
-        self.grad_Bx_y = None
-        self.grad_By_x = None
-        self.grad_By_y = None
-        self.grad_Bm = None
-        self.J = None
-        self.Jh = None
-        self.hc = None
-        self.shear = None
-        self.rho = None
-        self.Bpx = None
-        self.Bpy = None
-        self.Bpz = None
+        # The four &#34;segments&#34; as raw arrays (no nodes for graph)
+        self.__background = None
+        self.__umbra = None
+        self.__pumbra = None
+        self.__nl = None
 
-        # The three datasets
-        self.baseline = self.physical_features(np.ones(self.shape, dtype = bool))
-        self.segmented = np.zeros(4 * NUM_FEATURES)
-        self.graph_ds = np.zeros(GRAPH_EMB_SIZE)
+        # The Three data sets
+        self.__sharps, self.__sharps_labels = data[&#34;sharps&#34;].values(), data[&#34;sharps&#34;].keys()
+        self.__baseline, self.__baseline_labels = self.physical_features(np.ones(self.shape, dtype = bool), &#34;bas_&#34;)
+        self.__segmented, self.__segmented_labels = np.zeros(4 *  self.num_features), [&#34;&#34; for _ in range(4 * self.num_features)]
+        self.__G = nx.Graph()
 
-        # List of node masks
-        # Each index of node_masks corresponds to its feature vector in feature_vec
-        # Ditto w/ G
-        self.node_masks = np.zeros((0, self.shape[0], self.shape[1]))
-        self.node_feature_vecs = np.zeros((0, NUM_FEATURES))
-        self.G = nx.Graph() 
+        # GRAPH DATA
+        # Graph data is split between masks and feature vectors. Each &#34;mask&#34; is a node that gets its physical features computed on
+        self.__node_masks = np.zeros((0, self.shape[0], self.shape[1]), dtype = bool)
+        self.__G_labels = self.__baseline_labels # Just a copy of baseline
 
-        self.umbra = None
-        self.pumbra = None
-        self.nl = None
-        self.background = None
-        self.graph_edges_declared = False
-
-
-    # Main Two Functions for accessing data
-    def physical_features(self, mask):
-        &#34;&#34;&#34;Extracts the physical fetures from the active region.
+    def show_graph(self, axs_cont, axs_seg):
+        &#34;&#34;&#34;Plots the continuum next to segmented graph with nodes
+        Located on the graph with colors
+        
+        Note that umbras and penumbras are generally going to be very close to one another
+        This is because the umbra is near the center of the penumbra so their centers are going
+        to be close - there are a few good examples of nodes that work well - see documentation/guides
 
         Args:
-            mask (Numpy boolean Array of the same shape as self): A mask (subset) of self to extract physical 
-            features on. ie, which pixels of self should this function compute
+            axs_cont (axis): The continuum Axis 
+            axs_seg (axis): The segmented axis
+        &#34;&#34;&#34;
+        self.assert_masks()
+
+        color_keys = {&#34;penumbra&#34; : 1.0, &#34;umbra&#34; : 0.5714285714285714, &#34;nl&#34; : 0.0}
+        values = [color_keys.get(x[1][&#34;type&#34;], 0.25) for x in self.__G.nodes.data()]
+        pos = nx.get_node_attributes(self.__G, &#34;pos&#34;)
+
+        axs_cont.imshow(self.cont)
+        nx.draw(self.__G, pos, axs_cont, node_size = 10, cmap = plt.get_cmap(&#39;viridis&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)
+        axs_seg.imshow(self.__umbra | self.__pumbra | self.__nl, cmap = &#34;gray&#34;)
+        nx.draw(self.__G, pos, axs_seg, node_size = 10, cmap = plt.get_cmap(&#39;viridis&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)
+
+    def show_umbra(self, axs_orig, axs_seg):
+        &#34;&#34;&#34;Shows the umbra segmented next to the continuum
+
+        Args:
+            axs_orig (matplotlib axis): The axis for the unsegmented image
+            axs_seg (matplotlib axis): The axis for the segmented image
+        &#34;&#34;&#34;
+        self.assert_masks()
+        axs_orig.imshow(self.cont, cmap = &#34;gray&#34;)
+        axs_seg.imshow(~self.__umbra, cmap = &#34;gray&#34;)
+        axs_orig.axis(False)
+        axs_seg.axis(False)
+    
+    def show_neutral_line(self, axs_orig, axs_seg):
+        &#34;&#34;&#34;Shows the neutral line segmented next to the line of sight magnetic field
+
+        Args:
+            axs_orig (matplotlib axis): The axis for the unsegmented image
+            axs_seg (matplotlib axis): The axis for the segmented image
+        &#34;&#34;&#34;
+        self.assert_masks()
+        axs_orig.imshow(self.Bz, cmap = &#34;gray&#34;)
+        axs_seg.imshow(~self.__nl, cmap = &#34;gray&#34;)
+        axs_orig.axis(False)
+        axs_seg.axis(False)
+
+    def show_penumbra(self, axs_orig, axs_seg):
+        &#34;&#34;&#34;Shows the penumbra segmented next to the continuum
+
+        Args:
+            axs_orig (matplotlib axis): The axis for the unsegmented image
+            axs_seg (matplotlib axis): The axis for the segmented image
+        &#34;&#34;&#34;
+        self.assert_masks()
+        axs_orig.imshow(self.cont, cmap = &#34;gray&#34;)
+        axs_seg.imshow(~self.__pumbra, cmap = &#34;gray&#34;)
+        axs_orig.axis(False)
+        axs_seg.axis(False)
+
+    def show_background(self, axs_orig, axs_seg):
+        &#34;&#34;&#34;Shows the background segmented next to the continuum
+
+        Args:
+            axs_orig (matplotlib axis): The axis for the unsegmented image
+            axs_seg (matplotlib axis): The axis for the segmented image
+        &#34;&#34;&#34;
+        self.assert_masks()
+        axs_orig.imshow(self.cont, cmap = &#34;gray&#34;)
+        axs_seg.imshow(~self.__background, cmap = &#34;gray&#34;)
+        axs_orig.axis(False)
+        axs_seg.axis(False)
+
+    def get_graph(self):
+        &#34;&#34;&#34;Gets the sharps data and labels
+
+        Sharps data is the data JSOC calculates - good baseline
 
         Returns:
-            1 dimensional Numpy array: an array with all of the physical features computed on the subset provided by mask
+            data, labels
         &#34;&#34;&#34;
-        mask = torch.from_numpy(mask).to(dev)
-        self.switch_to_gpu()
+        self.assert_masks()
+        return self.__G, self.__G_labels
 
-        moment_features = torch.tensor([
-            *self.z_moments(mask), \
-            *self.h_moments(mask), \
-            *self.gamma_moments(mask), \
-            *self.B_grad_moments(mask), \
-            *self.Bz_grad_moments(mask), \
-            *self.Bh_grad_moments(mask), \
-            *self.J_moments(mask), \
-            *self.Jh_moments(mask), \
-            *self.twist_moments(mask), \
-            *self.hc_moments(mask), \
-            *self.shear_moments(mask), \
-            *self.rho_moments(mask)
-            ])
-        val = torch.tensor([
-            self.phitot(mask), \
-            self.phitotabs(mask), \
-            self.itot(mask), \
-            self.itotabs(mask), \
-            self.hctot(mask), \
-            self.hctotabs(mask), \
-            self.totrho(mask), \
-            *moment_features
-            ])
-        self.come_back_from_gpu()
-        mask = mask.detach().cpu().numpy()
-        return val
+    def get_sharps(self):
+        &#34;&#34;&#34;Gets the sharps data and labels
 
-    def switch_to_gpu(self):
-        self.Bz = torch.from_numpy(self.Bz).to(dev)
-        self.Bx = torch.from_numpy(self.Bx).to(dev)
-        self.By = torch.from_numpy(self.By).to(dev)
-        self.cont = torch.from_numpy(self.cont).to(dev)
+        Sharps data is the data JSOC calculates - good baseline
 
-    def come_back_from_gpu(self):
-        self.Bz = self.Bz.detach().cpu().numpy()
-        self.Bx = self.Bx.detach().cpu().numpy()
-        self.By = self.By.detach().cpu().numpy()
-        self.cont = self.cont.detach().cpu().numpy()
+        Returns:
+            data, labels
+        &#34;&#34;&#34;
+        return self.__sharps, self.__sharps_labels
+
+    def get_baseline(self):
+        &#34;&#34;&#34;Get function for baseline
+
+        Returns:
+            numpy array: baseline data set
+        &#34;&#34;&#34;
+        return self.__baseline, self.__baseline_labels
+
+    def get_segmented(self):
+        &#34;&#34;&#34;Get function for segmented
+
+        Returns:
+            numpy array: segmented data set 
+        &#34;&#34;&#34;
+        self.assert_masks()
+        return self.__segmented, self.__segmented_labels
 
     def assert_masks(self):
+        &#34;&#34;&#34;One function that generates all three masks. If all three masks are already
+        generated, this function does nothing
+        &#34;&#34;&#34;
         self.assert_neutral_lines()
         self.assert_umbra_pumbra()
         self.assert_background()
 
-    def assert_neutral_lines(self, kernel_radius = 1):
-        if self.nl is None:
+    
+    def assert_background(self):
+        &#34;&#34;&#34;Generates a background mask. If background is already generated, does nothing
+        Background is simply $$\\neg (Umbra \\cup Penumbra \\cup Neutral Line)$$
+        &#34;&#34;&#34;
+        if self.__background is None:
+            self.__background = torch.zeros(self.shape, dtype=bool)
+            self.assert_neutral_lines()
+            self.assert_umbra_pumbra()
+
+            background = ~(self.__nl | self.__umbra | self.__pumbra)
+
+            # Update dataset
+            data, labels = self.physical_features(background, &#34;bckg_&#34;)
+            self.__segmented[2*self.num_features:3*self.num_features] = data
+            self.__segmented_labels[2*self.num_features:3*self.num_features] = labels
+
+            self.__background = background
+
+    def assert_neutral_lines(self, radius = 3, thresh = 150):
+        &#34;&#34;&#34;Generates neutral lines using morphological operations and a flux threshold
+        finds neutral lines using the method described by Schrijver in
+        
+        **C. J. Schrijver. A characteristic magnetic field pattern associated with all major solar flares and its use in flare forecasting. *The Astrophysical Journal, 655(2), 2007.***
+
+
+        Args:
+            radius (int, optional): The found neutral line is one pixel thick, so dilating it slightly adds the surrounding neighborhood. This radius
+            is passed to sklearn.morphology.square(radius) in the call to sklearn.morphology.binary_dilation. Defaults to 3
+            thresh (int, optional): Flux threshold. Defaults to 150 (as used by Schjriver et. al).
+        &#34;&#34;&#34;
+        if self.__nl is None:
             # Find neutral Lines
             thresh = 150
-            nl_mask = binary_dilation(self.Bz &lt; -thresh, square(3)) &amp; binary_dilation(self.Bz &gt; thresh, square(3))
+            nl_mask = binary_dilation(self.Bz &lt; -thresh, square(radius)) &amp; binary_dilation(self.Bz &gt; thresh, square(radius))
 
 
-            labeled, labels, sizes = self.group_pixels(nl_mask)
-            labels, sizes = self.remove_small_groups(labeled, labels, sizes, 10)
-            labels, sizes = self.remove_percentage_max(labeled, labels, sizes)
-            labels, sizes = self.largest_n_clusters(labels, sizes)
+            labeled, labels, sizes = self.__group_pixels(nl_mask)
+            labels, sizes = self.__remove_small_groups(labeled, labels, sizes, 10)
+            labels, sizes = self.__remove_percentage_max(labeled, labels, sizes)
+            labels, sizes = self.__largest_n_clusters(labels, sizes)
 
             # Add all the graph nodes
             nl_mask = np.zeros(self.shape, dtype = bool)
-            cur_node = len(self.node_masks)
+            cur_node = len(self.__node_masks)
 
             if len(sizes) == 0:
-                self.segmented[0:NUM_FEATURES] = 0
-                self.nl = nl_mask
+                self.__segmented[0:self.num_features] = 0
+                self.__nl = nl_mask
                 return
 
             for i in labels:
                 mask = labeled == i
-                self.node_masks = np.concatenate((self.node_masks, mask[None,...]), axis = 0)
-                self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(mask)))
-                self.G.add_node(cur_node)
-                cur_node += 1
+                cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, &#34;neutral line&#34;)
                 nl_mask |= mask
 
             # Compute the segmented data set
-            self.segmented[0:NUM_FEATURES] = self.physical_features(nl_mask)
-            self.nl = nl_mask
+            data, labels = self.physical_features(nl_mask, &#34;nl_&#34;)
+            self.__segmented[0:self.num_features] = data
+            self.__segmented_labels[0:self.num_features] = labels
+            self.__nl = nl_mask
 
+    
 
     def assert_umbra_pumbra(self):
-        if self.pumbra is None or self.umbra is None:
+        &#34;&#34;&#34;An original algorithm for detecting umbras and penumbras from a continuum image
+
+        High Level Algorithm:
+
+        1. bound continuum between 0 and 255
+
+        2. use an adaptive filter on the bounded continuum
+
+        3. group and label touching pixels 
+
+        4. remove groups of pixels that are less than 500 from those remaining (if any) 
+
+        5. remove groups of pixels that border the image (usually noise) from those remaining (if any) 
+
+        6. remove all groups that are smaller than 10% of the size of the maximum group size from those remaining (if any)  
+
+        7. remove take the largest 6 clusters from those remaining (if any) 
+
+        8. The remaining groups are **penumbra outlines**, repeat the above process isolated only to the penumbra outlines
+        if the difference between maximum and minimum flux in the mask is greater than 21000 and the resulting clusters are umbras
+
+        9. Keep the remaining 6 largest umbras
+        &#34;&#34;&#34;
+        if self.__pumbra is None or self.__umbra is None:
             cont_bounded = (255 * (self.cont - np.min(self.cont)) / np.ptp(self.cont)).astype(np.uint8)
  
             block_size = np.min(self.shape)
@@ -235,21 +360,21 @@ class ActiveRegion:
             offset = 10
             binary_adaptive = cont_bounded &lt; (threshold_local(cont_bounded, block_size, offset = offset) - offset)
 
-            labeled_0, labels, sizes = self.group_pixels(binary_adaptive)
-            labels, sizes = self.remove_small_groups(labeled_0, labels, sizes)
-            labels, sizes = self.remove_bordering_pixels(labeled_0, labels, sizes)
-            labels, sizes = self.remove_percentage_max(labeled_0, labels, sizes)
-            labels, sizes = self.largest_n_clusters(labels, sizes)
+            labeled_0, labels, sizes = self.__group_pixels(binary_adaptive)
+            labels, sizes = self.__remove_small_groups(labeled_0, labels, sizes)
+            labels, sizes = self.__remove_bordering_pixels(labeled_0, labels, sizes)
+            labels, sizes = self.__remove_percentage_max(labeled_0, labels, sizes)
+            labels, sizes = self.__largest_n_clusters(labels, sizes)
 
             um_mask = np.zeros(self.shape, dtype = bool)
             pu_mask = np.zeros(self.shape, dtype = bool)
             cur_node = 0
 
             if len(sizes) == 0:
-                self.segmented[NUM_FEATURES:2*NUM_FEATURES] = 0
-                self.segmented[2*NUM_FEATURES:3*NUM_FEATURES] = 0
-                self.umbra = um_mask
-                self.pumbra = pu_mask
+                self.__segmented[self.num_features:2*self.num_features] = 0
+                self.__segmented[2*self.num_features:3*self.num_features] = 0
+                self.__umbra = um_mask
+                self.__pumbra = pu_mask
                 return
 
             for i in labels:
@@ -264,60 +389,92 @@ class ActiveRegion:
 
 
                     # Further segment the umbra node again
-                    labeled, labels, sizes = self.group_pixels(pu)
-                    labels, sizes = self.remove_small_groups(labeled, labels, sizes, 10)
-                    labels, sizes = self.remove_percentage_max(labeled, labels, sizes)
-                    labels, sizes = self.largest_n_clusters(labels, sizes)
+                    labeled, labels, sizes = self.__group_pixels(pu)
+                    labels, sizes = self.__remove_small_groups(labeled, labels, sizes, 10)
+                    labels, sizes = self.__remove_percentage_max(labeled, labels, sizes)
+                    labels, sizes = self.__largest_n_clusters(labels, sizes)
 
                     for i in labels:
                         mask = labeled == i
-                        self.node_masks = np.concatenate((self.node_masks, mask[None,...]), axis = 0)
-                        self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(mask)))
-                        self.G.add_node(cur_node)
-                        cur_node += 1
+                        cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, &#34;penumbra&#34;)
                         pu_mask |= mask
 
                     # Further segment the umbra node again
-                    labeled, labels, sizes = self.group_pixels(um)
-                    labels, sizes = self.remove_small_groups(labeled, labels, sizes, 10)
-                    labels, sizes = self.remove_percentage_max(labeled, labels, sizes)
-                    labels, sizes = self.largest_n_clusters(labels, sizes)
+                    labeled, labels, sizes = self.__group_pixels(um)
+                    labels, sizes = self.__remove_small_groups(labeled, labels, sizes, 10)
+                    labels, sizes = self.__remove_percentage_max(labeled, labels, sizes)
+                    labels, sizes = self.__largest_n_clusters(labels, sizes)
 
                     for i in labels:
                         mask = labeled == i
-                        self.node_masks = np.concatenate((self.node_masks, mask[None,...]), axis = 0)
-                        self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(mask)))
-                        self.G.add_node(cur_node)
-                        cur_node += 1
+                        cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, &#34;umbra&#34;)
                         um_mask |= mask
 
                 else:
                     # Only umbra
                     um = mask &amp; (self.cont &lt;= t)
-                    self.node_masks = np.concatenate((self.node_masks, um[None,...]), axis = 0)
-                    self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(um)))
-                    self.G.add_node(cur_node)
-                    cur_node += 1
+                    cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, &#34;umbra&#34;)
                     um_mask |= um
             
             # Compute the segmented data set
-            self.segmented[NUM_FEATURES:2*NUM_FEATURES] = self.physical_features(um_mask)
-            self.segmented[2*NUM_FEATURES:3*NUM_FEATURES] = self.physical_features(pu_mask)
-            self.umbra = um_mask
-            self.pumbra = pu_mask
+            data, labels = self.physical_features(um_mask, &#34;um_&#34;)
+            self.__segmented[self.num_features:2*self.num_features] = data
+            self.__segmented_labels[self.num_features:2*self.num_features] = labels
 
-    # Grouping and filtering operations
-    def group_pixels(self, mask):
+            data, labels = self.physical_features(um_mask, &#34;pu_&#34;)
+            self.__segmented[2*self.num_features:3*self.num_features] = data
+            self.__segmented_labels[2*self.num_features:3*self.num_features] = labels
+
+            self.__umbra = um_mask
+            self.__pumbra = pu_mask
+
+    def __group_pixels(self, mask):
+        &#34;&#34;&#34;Groups pixels in a binary mask based on if they are touching
+
+        Args:
+            mask (np.array): A mask with binary pixels
+
+        Returns:
+            labeled: a mask that is labeled from 0 to number of groups (0 is the background) the size of the number in the label doesn&#39;t mean anything
+            labels: a list of labels in labeled
+            sizes: a list of sizes corresponding to each element in labels
+        &#34;&#34;&#34;
         labeled = label(mask, connectivity = 2)
         labels = np.unique(labeled)[1:]
         sizes = np.array([np.count_nonzero(labeled==i) for i in labels])
         return labeled, labels, sizes
-    def remove_small_groups(self, labeled, labels, sizes, p = 500):
+
+    def __remove_small_groups(self, labeled: np.array, labels: np.array, sizes: np.array, p = 500):
+        &#34;&#34;&#34;Removes groups of pixels smaller than p
+
+        Args:
+            labeled (np.array): The labeled array returned from group_pixels
+            labels (np.array): The distinct labels found in labeled
+            sizes (np.array): The size of each label in labels
+            p (int, optional): Smallest group size. Defaults to 500.
+
+        Returns:
+            labels: Labels filtered 
+            sizes: sizes filtered 
+        &#34;&#34;&#34;
         if len(sizes) == 0:
             return labels, sizes
         filt = np.argwhere((sizes &lt; p))
         return np.delete(labels, filt), np.delete(sizes, filt)
-    def remove_bordering_pixels(self, labeled, labels, sizes):
+
+    def __remove_bordering_pixels(self, labeled: np.array, labels: np.array, sizes: np.array):
+        &#34;&#34;&#34;Removes pixels that border the edge
+
+        Args:
+            labeled (np.array): The labeled array returned from group_pixels
+            labels (np.array): The distinct labels found in labeled
+            sizes (np.array): The size of each label in labels
+            p (int, optional): Smallest group size. Defaults to 500.
+
+        Returns:
+            labels: Labels filtered 
+            sizes: sizes filtered 
+        &#34;&#34;&#34;
         if len(sizes) == 0:
             return labels, sizes
         bordered = []
@@ -328,210 +485,72 @@ class ActiveRegion:
             if max(cols) == self.shape[1] - 1 or max(rows) == self.shape[0] - 1:
                 bordered.append(i)
         return np.delete(labels, bordered), np.delete(sizes, bordered)
-    def remove_percentage_max(self, labeled, labels, sizes, p = 0.1):
+
+    def __remove_percentage_max(self, labeled, labels, sizes, p = 0.1):
+        &#34;&#34;&#34;Removes pixels that border the edge
+
+        Args:
+            labeled (np.array): The labeled array returned from group_pixels
+            labels (np.array): The distinct labels found in labeled
+            sizes (np.array): The size of each label in labels
+            p (int, optional): Smallest group size. Defaults to 500.
+
+        Returns:
+            labels: Labels filtered 
+            sizes: sizes filtered 
+        &#34;&#34;&#34;
         if len(sizes) == 0:
             return labels, sizes
         filt = np.argwhere(sizes &lt; p * np.max(sizes))
         return np.delete(labels, filt), np.delete(sizes, filt)
-    def largest_n_clusters(self, labels, sizes, n = 6):
+
+    def __largest_n_clusters(self, labels, sizes, n = 6):
+        &#34;&#34;&#34;Removes pixels that border the edge
+
+        Args:
+            labeled (np.array): The labeled array returned from group_pixels
+            labels (np.array): The distinct labels found in labeled
+            sizes (np.array): The size of each label in labels
+            p (int, optional): Smallest group size. Defaults to 500.
+
+        Returns:
+            labels: Labels filtered 
+            sizes: sizes filtered 
+        &#34;&#34;&#34;
         if len(sizes) == 0:
             return labels, sizes
         n = min(n, len(labels))
         a = np.partition(sizes, -n)[-n]
         return labels[sizes &gt;= a], sizes[sizes &gt;= a]
 
-    def assert_background(self):
-        if self.background is None:
-            self.background = torch.zeros(self.shape, dtype=bool)
-            self.assert_neutral_lines()
-            self.assert_umbra_pumbra()
+    def __ar_add_node(self, data, cur_node, mask, type):
+        &#34;&#34;&#34;Adds a node to self graph and connects to all the previous nodes
 
-            #  node = {&#34;COM&#34; : (0, 0), &#34;MASK&#34; : ~(self.nl | self.umbra | self.pumbra)}
-            background = ~(self.nl | self.umbra | self.pumbra)
-            self.segmented[3*NUM_FEATURES:4*NUM_FEATURES] = self.physical_features(background)
-            self.background = background
+        Args:
+            data ([type]): [description]
+            cur_node ([type]): [description]
+            mask ([type]): [description]
 
-    def connect_edges(self):
-        self.assert_masks()
-        if not self.graph_edges_declared:
-            for i in range(len(self.node_masks) - 1):
-                for j in range(i + 1, len(self.node_masks)):
-                    if np.count_nonzero(binary_dilation(self.node_masks[i], square(3)) &amp; binary_dilation(self.node_masks[j], square(3))) &gt; 0:
-                        self.G.add_edge(i, j)
-            self.graph_edges_declared = True
-            
+        Returns:
+            [type]: [description]
+        &#34;&#34;&#34;
+        # Get the center of the node for plotting
+        x, y = np.where(mask)
+        x, y = int(np.mean(x)), int(np.mean(y))
 
-    # Tools
-    def moment(self, data):
-        avg = torch.mean(data)
-        std = torch.sqrt(torch.mean((data - avg)**2))
-        skw = torch.mean(((data - avg)/std)**3)
-        krt = torch.mean(((data - avg)/std)**4) - 3.0
-        return torch.tensor([avg, std, skw, krt])
+        self.__G.add_node(cur_node, v = data, pos = (y,x), type = type)
+        #self.__G.add_node(cur_node, v = data, pos = (0,100), type = type)
 
-    def norm(self, data):
-        n = 0
-        for i in data:
-            n += torch.abs(i)
-        return n
+        mask_dil = binary_dilation(mask, square(3))
 
+        for m in range(len(self.__node_masks)):
+            if np.count_nonzero(mask_dil &amp; self.__node_masks[m]) &gt; 0:
+                self.__G.add_edge(cur_node, m)
 
-    # Physical Properties
-    def z_moments(self, mask):
-        return self.moment(self.Bz[mask])
-    def phitot(self, mask):
-        return torch.sum(torch.abs(self.Bz[mask]))
-    def phitotabs(self, mask):
-        return torch.abs(torch.sum(self.Bz[mask]))
-    def h_moments(self, mask):
-        self.assert_Bh()
-        return self.moment(self.Bh[mask])
-    def gamma_moments(self, mask):
-        self.assert_gamma()
-        return self.moment(self.gamma[mask])
-    def B_grad_moments(self, mask):
-        self.assert_grad_B()
-        return self.moment(self.norm((self.grad_B_x[mask], self.grad_B_y[mask])))
-    def Bz_grad_moments(self, mask):
-        self.assert_grad_Bz()
-        return self.moment(self.norm((self.grad_Bz_x[mask], self.grad_Bz_y[mask])))
-    def Bh_grad_moments(self, mask):
-        self.assert_grad_Bh()
-        return self.moment(self.norm((self.grad_Bh_x[mask], self.grad_Bh_y[mask])))
-    def J_moments(self, mask):
-        self.assert_J()
-        return self.moment(self.J[mask])
-    def itot(self, mask):
-        self.assert_J()
-        return torch.sum(torch.abs(self.J[mask]))
-    def itotabs(self, mask):
-        self.assert_J()
-        return torch.abs(torch.sum(self.J[mask]))
-    def itot_polarity(self, mask):
-        self.assert_J()
-        return torch.abs(torch.sum(self.J[self.Bz &gt; 0 &amp; mask])) + torch.abs(torch.sum(self.J[self.Bz &lt; 0 &amp; mask]))
-    def Jh_moments(self, mask):
-        self.assert_Jh()
-        return self.moment(self.Jh[mask])
-    def ihtot(self, mask):
-        self.assert_Jh()
-        return torch.sum(torch.abs(self.Jh[mask]))
-    def ihtotabs(self, mask):
-        self.assert_Jh()
-        return torch.abs(torch.sum(self.Jh[mask]))
-    def twist_moments(self, mask):
-        self.assert_J()
-        return self.moment(self.J[mask] / self.Bz[mask])
-    # Too computationally intensive
-    #def twist_force_free_m(self):
-    #    pass
-    def hc_moments(self, mask):
-        self.assert_hc()
-        return self.moment(self.hc[mask])
-    def hctot(self, mask):
-        self.assert_hc()
-        return torch.sum(torch.abs(self.hc[mask]))
-    def hctotabs(self, mask):
-        self.assert_hc()
-        return torch.abs(torch.sum(self.hc[mask]))
-    def shear_moments(self, mask):
-        self.assert_shear() # Pretty big function call right here
-        return self.moment(self.shear[mask])
-    def rho_moments(self, mask):
-        self.assert_rho()
-        return self.moment(self.rho[mask])
-    def totrho(self, mask):
-        self.assert_rho()
-        return torch.sum(self.rho[mask])
+        self.__node_masks = np.concatenate((self.__node_masks, mask_dil[None,...]), axis = 0)
+        return cur_node + 1
 
-
-    # ASSERTIONS - designed so that each component is only calculated ONCE - example: if I want Bh,
-    # simply assert_Bh. If Bh already exists, then nothing is done
-    def assert_Bh(self):
-        if self.Bh is None:
-            self.Bh = self.norm((self.Bx, self.By))
-    def assert_gamma(self):
-        if self.gamma is None:
-            self.assert_Bh()
-            self.gamma = torch.arctan(self.Bz / self.Bh)
-    def assert_B(self):
-        if self.B is None:
-            self.B = self.norm((self.Bx, self.By, self.Bz))
-    def assert_grad_B(self):
-        if self.grad_B_x is None or self.grad_B_y is None:
-            self.assert_B()
-            self.grad_B_x, self.grad_B_y = gradient(self.B)
-    def assert_grad_Bh(self):
-        if self.grad_Bh_x is None or self.grad_Bh_y is None:
-            self.assert_Bh()
-            self.grad_Bh_x, self.grad_Bh_y = gradient(self.Bh)
-    def assert_grad_Bz(self):
-        if self.grad_Bz_x is None or self.grad_Bz_y is None:
-            self.grad_Bz_x, self.grad_Bz_y = gradient(self.Bz)
-    def assert_grad_Bx(self):
-        if self.grad_Bx_x is None or self.grad_Bx_y is None:
-            self.grad_Bx_x, self.grad_Bx_y = gradient(self.Bx)
-            self.grad_Bx_x = -self.grad_Bx_x
-    def assert_grad_By(self):
-        if self.grad_By_x is None or self.grad_By_y is None:
-            self.grad_By_x, self.grad_By_y = gradient(self.By)
-            self.grad_By_x = -self.grad_By_x
-    def assert_grad_Bm(self):
-        if self.grad_Bm is None:
-            self.assert_grad_B()
-            self.grad_Bm = self.norm((self.grad_B_x, self.grad_B_y))
-    def assert_J(self):
-        if self.J is None:
-            self.assert_grad_Bx()
-            self.assert_grad_By()
-            self.J = self.grad_By_x - self.grad_Bx_y
-    def assert_Jh(self):
-        if self.Jh is None:
-            self.assert_grad_Bx()
-            self.assert_grad_By()
-            self.assert_B()
-            self.Jh = (self.By * self.grad_Bx_y - self.Bx * self.grad_By_x) / self.B
-    def assert_hc(self):
-        if self.hc is None:
-            self.assert_J()
-            self.hc = self.Bz * self.J
-    def assert_shear(self):
-        if self.shear is None:
-            self.assert_Bp()
-            self.assert_B()
-            dot = self.Bx * self.Bpx + self.By * self.Bpy + self.Bz * self.Bpz
-            magp = self.norm((self.Bpx, self.Bpy, self.Bpz))
-            self.shear = torch.arccos(dot / (self.B * magp))
-    def assert_rho(self):
-        if self.rho is None:
-            self.assert_Bp()
-            self.rho = (self.B - self.norm((self.Bpx, self.Bpy, self.Bpz)))**2
-    def assert_Bp(self):
-        if self.Bpx is None or self.Bpy is None or self.Bpz is None:
-
-            Bz = F.pad(self.Bz, (radius, radius, radius, radius)).float()
-
-            dz = 0.0001
-            Xmx = Bz.shape[0]
-            Ymx = Bz.shape[1]
-
-            pot = torch.zeros(self.shape, device = dev).float()
-
-            # Distance kernel - a kernel with values filled in the &#34;circle&#34; (by def of norm) as the distance from
-            # the center multiplied by dz (for integration)
-
-            kern = dist_kern.to(dev)
-
-            # Convolution -- integrate over each pixel
-            pot = F.conv2d(Bz[None, None, ...], kern[None, None, ...])[0][0]
-
-            # Save potential
-            self.potential = pot
-
-            # Get Potential Fields
-            self.Bpz = self.Bz
-            grad = gradient(self.potential)
-            self.Bpx, self.Bpy = -grad[0], -grad[1]</code></pre>
+    </code></pre>
 </details>
 </section>
 <section>
@@ -545,21 +564,72 @@ class ActiveRegion:
 <dl>
 <dt id="flares.active_region.ActiveRegion"><code class="flex name class">
 <span>class <span class="ident">ActiveRegion</span></span>
-<span>(</span><span>hnum: int, date: str, root: str)</span>
+<span>(</span><span>hnum: int, date: datetime.datetime, root: str)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>An Active Region is an entry point into physical features for
-parameterization, segmentation, and graph methods. If the specified
-(hnum, date) active region contains a nan, self.valid turns to false
-and subsequent calls to ActiveRegion methods may fail given the existence
-of nans</p>
+<div class="desc"><p>An Active Region is an entry point into
+parameterization, segmentation, and graph methods. </p>
+<p>An Active Region is uniquely determined by it's harpnumber (hnum) and date (date)
+If the specified active region given (hnum, date) contains a nan, self.valid is False
+(otherwise self.valid is True) and subsequent calls to ActiveRegion methods may fail
+given the existence of nans. Check status of the active region by self.valid.
+The existence of nan's implies the image is moving off the solar limb. This is an issue that
+could be turned into a ticket and fixed, but for the time being I am ignoring these images</p>
+<p>Magnetograms and continuums must be organized by the following standard (with root as the root)
+(This standard may be loosened in the future and subsequent documentation will change)</p>
+<ul>
+<li>root<ul>
+<li>magnetogram<ul>
+<li>sharp_<hnum><ul>
+<li>hmi.sharp_cea_720s.<hnum>.<year><month><day>_<hour><minute><second>_TAI.Bp.fits</li>
+<li>hmi.sharp_cea_720s.<hnum>.<year><month><day>_<hour><minute><second>_TAI.Br.fits</li>
+<li>hmi.sharp_cea_720s.<hnum>.<year><month><day>_<hour><minute><second>_TAI.Bt.fits</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>continuum<ul>
+<li>sharp_<hnum><ul>
+<li>hmi.sharp_cea_720s.<hnum>.<year><month><day>_<hour><minute><second>_TAI.continuum.fits</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p>So for example, (this will work on Swami), a new active region call:</p>
+<pre><code class="language-python">ActiveRegion(7115, datetime(2017, 9, 3, 10), &quot;/srv/data/thli2739&quot;) 
+</code></pre>
+<p>Would <strong>require</strong> the following files or symlinks to exist:</p>
+<ul>
+<li>/srv/data/thli2739<ul>
+<li>/magnetogram<ul>
+<li>/sharp_7115<ul>
+<li>/hmi.sharp_cea_720s.7115.20170903_100000_TAI.Bp.fits</li>
+<li>/hmi.sharp_cea_720s.7115.20170903_100000_TAI.Br.fits</li>
+<li>/hmi.sharp_cea_720s.7115.20170903_100000_TAI.Bt.fits</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>/continuum<ul>
+<li>/sharp_7115<ul>
+<li>/hmi.sharp_cea_720s.7115.20170903_100000_TAI.continuum.fits</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>hnum</code></strong> :&ensp;<code>int</code></dt>
-<dd>The specified harpnumber - file must exist in root/magnetogram/sharp_{hnum} </dd>
+<dd>The specified harpnumber - file must exist in root/magnetogram/sharp_{hnum} and root/continuum/sharp_{hnum}</dd>
 <dt><strong><code>date</code></strong> :&ensp;<code>datetime</code></dt>
 <dd>The specified active region date and time - this date must exist in the specified harpnumber data folder </dd>
-<dt><strong><code>root</code></strong> :&ensp;<code>asdkln</code></dt>
+<dt><strong><code>root</code></strong> :&ensp;<code>string</code></dt>
 <dd>The path to the data. Root must be a directory that holds both root/magnetogram and root/continuum. Inside both</dd>
 </dl>
 <p>of these subfolders, there must be a series of folders labeled sharp_{hnum} that contain the sequence of fits files for extraction</p></div>
@@ -567,23 +637,60 @@ of nans</p>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">class ActiveRegion:
-    def __init__(self, hnum: int, date: str, root: str):
-        &#34;&#34;&#34;An Active Region is an entry point into physical features for 
-        parameterization, segmentation, and graph methods. If the specified
-        (hnum, date) active region contains a nan, self.valid turns to false
-        and subsequent calls to ActiveRegion methods may fail given the existence
-        of nans
+<pre><code class="python">class ActiveRegion(ActiveRegionParameters):
+    def __init__(self, hnum: int, date: datetime, root: str):
+        &#34;&#34;&#34;An Active Region is an entry point into 
+        parameterization, segmentation, and graph methods. 
+
+        An Active Region is uniquely determined by it&#39;s harpnumber (hnum) and date (date)
+        If the specified active region given (hnum, date) contains a nan, self.valid is False
+        (otherwise self.valid is True) and subsequent calls to ActiveRegion methods may fail 
+        given the existence of nans. Check status of the active region by self.valid.
+        The existence of nan&#39;s implies the image is moving off the solar limb. This is an issue that
+        could be turned into a ticket and fixed, but for the time being I am ignoring these images
+
+        Magnetograms and continuums must be organized by the following standard (with root as the root)
+        (This standard may be loosened in the future and subsequent documentation will change)
+
+        - root
+            - magnetogram
+                - sharp_&lt;hnum&gt;
+                    - hmi.sharp_cea_720s.&lt;hnum&gt;.&lt;year&gt;&lt;month&gt;&lt;day&gt;_&lt;hour&gt;&lt;minute&gt;&lt;second&gt;_TAI.Bp.fits
+                    - hmi.sharp_cea_720s.&lt;hnum&gt;.&lt;year&gt;&lt;month&gt;&lt;day&gt;_&lt;hour&gt;&lt;minute&gt;&lt;second&gt;_TAI.Br.fits
+                    - hmi.sharp_cea_720s.&lt;hnum&gt;.&lt;year&gt;&lt;month&gt;&lt;day&gt;_&lt;hour&gt;&lt;minute&gt;&lt;second&gt;_TAI.Bt.fits
+            - continuum
+                - sharp_&lt;hnum&gt;
+                    - hmi.sharp_cea_720s.&lt;hnum&gt;.&lt;year&gt;&lt;month&gt;&lt;day&gt;_&lt;hour&gt;&lt;minute&gt;&lt;second&gt;_TAI.continuum.fits
+        
+        So for example, (this will work on Swami), a new active region call:
+        ```python
+        ActiveRegion(7115, datetime(2017, 9, 3, 10), &#34;/srv/data/thli2739&#34;) 
+        ```
+
+        Would **require** the following files or symlinks to exist:
+
+        - /srv/data/thli2739
+            - /magnetogram
+                - /sharp_7115
+                    - /hmi.sharp_cea_720s.7115.20170903_100000_TAI.Bp.fits
+                    - /hmi.sharp_cea_720s.7115.20170903_100000_TAI.Br.fits
+                    - /hmi.sharp_cea_720s.7115.20170903_100000_TAI.Bt.fits
+            - /continuum
+                - /sharp_7115
+                    - /hmi.sharp_cea_720s.7115.20170903_100000_TAI.continuum.fits
 
         Args:
-            hnum (int): The specified harpnumber - file must exist in root/magnetogram/sharp_{hnum} 
+            hnum (int): The specified harpnumber - file must exist in root/magnetogram/sharp_{hnum} and root/continuum/sharp_{hnum}
             date (datetime): The specified active region date and time - this date must exist in the specified harpnumber data folder 
-            root (asdkln): The path to the data. Root must be a directory that holds both root/magnetogram and root/continuum. Inside both
+            root (string): The path to the data. Root must be a directory that holds both root/magnetogram and root/continuum. Inside both
             of these subfolders, there must be a series of folders labeled sharp_{hnum} that contain the sequence of fits files for extraction
         &#34;&#34;&#34;
     
         # Generate xyz components of magnetic field and continuum
-        self.Bz, self.Bx, self.By, self.cont = get_data(hnum, date, root)
+        data = get_data(hnum, date, root)
+
+        self.Bz, self.Bx, self.By, self.cont = data[&#34;Bz&#34;], data[&#34;Bx&#34;], data[&#34;By&#34;], data[&#34;cont&#34;]
+        
         self.shape = self.Bz.shape
         self.valid = True # Valid is false
 
@@ -592,153 +699,243 @@ of nans</p>
             warnings.warn(f&#34;Hnum {hnum} date {date} has a nan, skipping&#34;)
             return
 
-        
         # To prevent nan&#39;s popping up do to small numbers,
         # cut everything below minimum val to minimum val
-        minimum_val = 0.01
+        minimum_val = 0.001
         self.Bz[np.abs(self.Bz) &lt; minimum_val] = minimum_val
         self.Bx[np.abs(self.Bx) &lt; minimum_val] = minimum_val
         self.By[np.abs(self.By) &lt; minimum_val] = minimum_val
 
+        # Now Bx By Bz are defined so generate the parameter class
+        super().__init__(self.Bz, self.By, self.Bx)
 
-        # All the fields / features
-        self.Bh = None
-        self.gamma = None
-        self.B = None
-        self.grad_B_x = None
-        self.grad_B_y = None
-        self.grad_Bh_x = None
-        self.grad_Bh_y = None
-        self.grad_Bz_x = None
-        self.grad_Bz_y = None
-        self.grad_Bx_x = None
-        self.grad_Bx_y = None
-        self.grad_By_x = None
-        self.grad_By_y = None
-        self.grad_Bm = None
-        self.J = None
-        self.Jh = None
-        self.hc = None
-        self.shear = None
-        self.rho = None
-        self.Bpx = None
-        self.Bpy = None
-        self.Bpz = None
+        # The four &#34;segments&#34; as raw arrays (no nodes for graph)
+        self.__background = None
+        self.__umbra = None
+        self.__pumbra = None
+        self.__nl = None
 
-        # The three datasets
-        self.baseline = self.physical_features(np.ones(self.shape, dtype = bool))
-        self.segmented = np.zeros(4 * NUM_FEATURES)
-        self.graph_ds = np.zeros(GRAPH_EMB_SIZE)
+        # The Three data sets
+        self.__sharps, self.__sharps_labels = data[&#34;sharps&#34;].values(), data[&#34;sharps&#34;].keys()
+        self.__baseline, self.__baseline_labels = self.physical_features(np.ones(self.shape, dtype = bool), &#34;bas_&#34;)
+        self.__segmented, self.__segmented_labels = np.zeros(4 *  self.num_features), [&#34;&#34; for _ in range(4 * self.num_features)]
+        self.__G = nx.Graph()
 
-        # List of node masks
-        # Each index of node_masks corresponds to its feature vector in feature_vec
-        # Ditto w/ G
-        self.node_masks = np.zeros((0, self.shape[0], self.shape[1]))
-        self.node_feature_vecs = np.zeros((0, NUM_FEATURES))
-        self.G = nx.Graph() 
+        # GRAPH DATA
+        # Graph data is split between masks and feature vectors. Each &#34;mask&#34; is a node that gets its physical features computed on
+        self.__node_masks = np.zeros((0, self.shape[0], self.shape[1]), dtype = bool)
+        self.__G_labels = self.__baseline_labels # Just a copy of baseline
 
-        self.umbra = None
-        self.pumbra = None
-        self.nl = None
-        self.background = None
-        self.graph_edges_declared = False
-
-
-    # Main Two Functions for accessing data
-    def physical_features(self, mask):
-        &#34;&#34;&#34;Extracts the physical fetures from the active region.
+    def show_graph(self, axs_cont, axs_seg):
+        &#34;&#34;&#34;Plots the continuum next to segmented graph with nodes
+        Located on the graph with colors
+        
+        Note that umbras and penumbras are generally going to be very close to one another
+        This is because the umbra is near the center of the penumbra so their centers are going
+        to be close - there are a few good examples of nodes that work well - see documentation/guides
 
         Args:
-            mask (Numpy boolean Array of the same shape as self): A mask (subset) of self to extract physical 
-            features on. ie, which pixels of self should this function compute
+            axs_cont (axis): The continuum Axis 
+            axs_seg (axis): The segmented axis
+        &#34;&#34;&#34;
+        self.assert_masks()
+
+        color_keys = {&#34;penumbra&#34; : 1.0, &#34;umbra&#34; : 0.5714285714285714, &#34;nl&#34; : 0.0}
+        values = [color_keys.get(x[1][&#34;type&#34;], 0.25) for x in self.__G.nodes.data()]
+        pos = nx.get_node_attributes(self.__G, &#34;pos&#34;)
+
+        axs_cont.imshow(self.cont)
+        nx.draw(self.__G, pos, axs_cont, node_size = 10, cmap = plt.get_cmap(&#39;viridis&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)
+        axs_seg.imshow(self.__umbra | self.__pumbra | self.__nl, cmap = &#34;gray&#34;)
+        nx.draw(self.__G, pos, axs_seg, node_size = 10, cmap = plt.get_cmap(&#39;viridis&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)
+
+    def show_umbra(self, axs_orig, axs_seg):
+        &#34;&#34;&#34;Shows the umbra segmented next to the continuum
+
+        Args:
+            axs_orig (matplotlib axis): The axis for the unsegmented image
+            axs_seg (matplotlib axis): The axis for the segmented image
+        &#34;&#34;&#34;
+        self.assert_masks()
+        axs_orig.imshow(self.cont, cmap = &#34;gray&#34;)
+        axs_seg.imshow(~self.__umbra, cmap = &#34;gray&#34;)
+        axs_orig.axis(False)
+        axs_seg.axis(False)
+    
+    def show_neutral_line(self, axs_orig, axs_seg):
+        &#34;&#34;&#34;Shows the neutral line segmented next to the line of sight magnetic field
+
+        Args:
+            axs_orig (matplotlib axis): The axis for the unsegmented image
+            axs_seg (matplotlib axis): The axis for the segmented image
+        &#34;&#34;&#34;
+        self.assert_masks()
+        axs_orig.imshow(self.Bz, cmap = &#34;gray&#34;)
+        axs_seg.imshow(~self.__nl, cmap = &#34;gray&#34;)
+        axs_orig.axis(False)
+        axs_seg.axis(False)
+
+    def show_penumbra(self, axs_orig, axs_seg):
+        &#34;&#34;&#34;Shows the penumbra segmented next to the continuum
+
+        Args:
+            axs_orig (matplotlib axis): The axis for the unsegmented image
+            axs_seg (matplotlib axis): The axis for the segmented image
+        &#34;&#34;&#34;
+        self.assert_masks()
+        axs_orig.imshow(self.cont, cmap = &#34;gray&#34;)
+        axs_seg.imshow(~self.__pumbra, cmap = &#34;gray&#34;)
+        axs_orig.axis(False)
+        axs_seg.axis(False)
+
+    def show_background(self, axs_orig, axs_seg):
+        &#34;&#34;&#34;Shows the background segmented next to the continuum
+
+        Args:
+            axs_orig (matplotlib axis): The axis for the unsegmented image
+            axs_seg (matplotlib axis): The axis for the segmented image
+        &#34;&#34;&#34;
+        self.assert_masks()
+        axs_orig.imshow(self.cont, cmap = &#34;gray&#34;)
+        axs_seg.imshow(~self.__background, cmap = &#34;gray&#34;)
+        axs_orig.axis(False)
+        axs_seg.axis(False)
+
+    def get_graph(self):
+        &#34;&#34;&#34;Gets the sharps data and labels
+
+        Sharps data is the data JSOC calculates - good baseline
 
         Returns:
-            1 dimensional Numpy array: an array with all of the physical features computed on the subset provided by mask
+            data, labels
         &#34;&#34;&#34;
-        mask = torch.from_numpy(mask).to(dev)
-        self.switch_to_gpu()
+        self.assert_masks()
+        return self.__G, self.__G_labels
 
-        moment_features = torch.tensor([
-            *self.z_moments(mask), \
-            *self.h_moments(mask), \
-            *self.gamma_moments(mask), \
-            *self.B_grad_moments(mask), \
-            *self.Bz_grad_moments(mask), \
-            *self.Bh_grad_moments(mask), \
-            *self.J_moments(mask), \
-            *self.Jh_moments(mask), \
-            *self.twist_moments(mask), \
-            *self.hc_moments(mask), \
-            *self.shear_moments(mask), \
-            *self.rho_moments(mask)
-            ])
-        val = torch.tensor([
-            self.phitot(mask), \
-            self.phitotabs(mask), \
-            self.itot(mask), \
-            self.itotabs(mask), \
-            self.hctot(mask), \
-            self.hctotabs(mask), \
-            self.totrho(mask), \
-            *moment_features
-            ])
-        self.come_back_from_gpu()
-        mask = mask.detach().cpu().numpy()
-        return val
+    def get_sharps(self):
+        &#34;&#34;&#34;Gets the sharps data and labels
 
-    def switch_to_gpu(self):
-        self.Bz = torch.from_numpy(self.Bz).to(dev)
-        self.Bx = torch.from_numpy(self.Bx).to(dev)
-        self.By = torch.from_numpy(self.By).to(dev)
-        self.cont = torch.from_numpy(self.cont).to(dev)
+        Sharps data is the data JSOC calculates - good baseline
 
-    def come_back_from_gpu(self):
-        self.Bz = self.Bz.detach().cpu().numpy()
-        self.Bx = self.Bx.detach().cpu().numpy()
-        self.By = self.By.detach().cpu().numpy()
-        self.cont = self.cont.detach().cpu().numpy()
+        Returns:
+            data, labels
+        &#34;&#34;&#34;
+        return self.__sharps, self.__sharps_labels
+
+    def get_baseline(self):
+        &#34;&#34;&#34;Get function for baseline
+
+        Returns:
+            numpy array: baseline data set
+        &#34;&#34;&#34;
+        return self.__baseline, self.__baseline_labels
+
+    def get_segmented(self):
+        &#34;&#34;&#34;Get function for segmented
+
+        Returns:
+            numpy array: segmented data set 
+        &#34;&#34;&#34;
+        self.assert_masks()
+        return self.__segmented, self.__segmented_labels
 
     def assert_masks(self):
+        &#34;&#34;&#34;One function that generates all three masks. If all three masks are already
+        generated, this function does nothing
+        &#34;&#34;&#34;
         self.assert_neutral_lines()
         self.assert_umbra_pumbra()
         self.assert_background()
 
-    def assert_neutral_lines(self, kernel_radius = 1):
-        if self.nl is None:
+    
+    def assert_background(self):
+        &#34;&#34;&#34;Generates a background mask. If background is already generated, does nothing
+        Background is simply $$\\neg (Umbra \\cup Penumbra \\cup Neutral Line)$$
+        &#34;&#34;&#34;
+        if self.__background is None:
+            self.__background = torch.zeros(self.shape, dtype=bool)
+            self.assert_neutral_lines()
+            self.assert_umbra_pumbra()
+
+            background = ~(self.__nl | self.__umbra | self.__pumbra)
+
+            # Update dataset
+            data, labels = self.physical_features(background, &#34;bckg_&#34;)
+            self.__segmented[2*self.num_features:3*self.num_features] = data
+            self.__segmented_labels[2*self.num_features:3*self.num_features] = labels
+
+            self.__background = background
+
+    def assert_neutral_lines(self, radius = 3, thresh = 150):
+        &#34;&#34;&#34;Generates neutral lines using morphological operations and a flux threshold
+        finds neutral lines using the method described by Schrijver in
+        
+        **C. J. Schrijver. A characteristic magnetic field pattern associated with all major solar flares and its use in flare forecasting. *The Astrophysical Journal, 655(2), 2007.***
+
+
+        Args:
+            radius (int, optional): The found neutral line is one pixel thick, so dilating it slightly adds the surrounding neighborhood. This radius
+            is passed to sklearn.morphology.square(radius) in the call to sklearn.morphology.binary_dilation. Defaults to 3
+            thresh (int, optional): Flux threshold. Defaults to 150 (as used by Schjriver et. al).
+        &#34;&#34;&#34;
+        if self.__nl is None:
             # Find neutral Lines
             thresh = 150
-            nl_mask = binary_dilation(self.Bz &lt; -thresh, square(3)) &amp; binary_dilation(self.Bz &gt; thresh, square(3))
+            nl_mask = binary_dilation(self.Bz &lt; -thresh, square(radius)) &amp; binary_dilation(self.Bz &gt; thresh, square(radius))
 
 
-            labeled, labels, sizes = self.group_pixels(nl_mask)
-            labels, sizes = self.remove_small_groups(labeled, labels, sizes, 10)
-            labels, sizes = self.remove_percentage_max(labeled, labels, sizes)
-            labels, sizes = self.largest_n_clusters(labels, sizes)
+            labeled, labels, sizes = self.__group_pixels(nl_mask)
+            labels, sizes = self.__remove_small_groups(labeled, labels, sizes, 10)
+            labels, sizes = self.__remove_percentage_max(labeled, labels, sizes)
+            labels, sizes = self.__largest_n_clusters(labels, sizes)
 
             # Add all the graph nodes
             nl_mask = np.zeros(self.shape, dtype = bool)
-            cur_node = len(self.node_masks)
+            cur_node = len(self.__node_masks)
 
             if len(sizes) == 0:
-                self.segmented[0:NUM_FEATURES] = 0
-                self.nl = nl_mask
+                self.__segmented[0:self.num_features] = 0
+                self.__nl = nl_mask
                 return
 
             for i in labels:
                 mask = labeled == i
-                self.node_masks = np.concatenate((self.node_masks, mask[None,...]), axis = 0)
-                self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(mask)))
-                self.G.add_node(cur_node)
-                cur_node += 1
+                cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, &#34;neutral line&#34;)
                 nl_mask |= mask
 
             # Compute the segmented data set
-            self.segmented[0:NUM_FEATURES] = self.physical_features(nl_mask)
-            self.nl = nl_mask
+            data, labels = self.physical_features(nl_mask, &#34;nl_&#34;)
+            self.__segmented[0:self.num_features] = data
+            self.__segmented_labels[0:self.num_features] = labels
+            self.__nl = nl_mask
 
+    
 
     def assert_umbra_pumbra(self):
-        if self.pumbra is None or self.umbra is None:
+        &#34;&#34;&#34;An original algorithm for detecting umbras and penumbras from a continuum image
+
+        High Level Algorithm:
+
+        1. bound continuum between 0 and 255
+
+        2. use an adaptive filter on the bounded continuum
+
+        3. group and label touching pixels 
+
+        4. remove groups of pixels that are less than 500 from those remaining (if any) 
+
+        5. remove groups of pixels that border the image (usually noise) from those remaining (if any) 
+
+        6. remove all groups that are smaller than 10% of the size of the maximum group size from those remaining (if any)  
+
+        7. remove take the largest 6 clusters from those remaining (if any) 
+
+        8. The remaining groups are **penumbra outlines**, repeat the above process isolated only to the penumbra outlines
+        if the difference between maximum and minimum flux in the mask is greater than 21000 and the resulting clusters are umbras
+
+        9. Keep the remaining 6 largest umbras
+        &#34;&#34;&#34;
+        if self.__pumbra is None or self.__umbra is None:
             cont_bounded = (255 * (self.cont - np.min(self.cont)) / np.ptp(self.cont)).astype(np.uint8)
  
             block_size = np.min(self.shape)
@@ -748,21 +945,21 @@ of nans</p>
             offset = 10
             binary_adaptive = cont_bounded &lt; (threshold_local(cont_bounded, block_size, offset = offset) - offset)
 
-            labeled_0, labels, sizes = self.group_pixels(binary_adaptive)
-            labels, sizes = self.remove_small_groups(labeled_0, labels, sizes)
-            labels, sizes = self.remove_bordering_pixels(labeled_0, labels, sizes)
-            labels, sizes = self.remove_percentage_max(labeled_0, labels, sizes)
-            labels, sizes = self.largest_n_clusters(labels, sizes)
+            labeled_0, labels, sizes = self.__group_pixels(binary_adaptive)
+            labels, sizes = self.__remove_small_groups(labeled_0, labels, sizes)
+            labels, sizes = self.__remove_bordering_pixels(labeled_0, labels, sizes)
+            labels, sizes = self.__remove_percentage_max(labeled_0, labels, sizes)
+            labels, sizes = self.__largest_n_clusters(labels, sizes)
 
             um_mask = np.zeros(self.shape, dtype = bool)
             pu_mask = np.zeros(self.shape, dtype = bool)
             cur_node = 0
 
             if len(sizes) == 0:
-                self.segmented[NUM_FEATURES:2*NUM_FEATURES] = 0
-                self.segmented[2*NUM_FEATURES:3*NUM_FEATURES] = 0
-                self.umbra = um_mask
-                self.pumbra = pu_mask
+                self.__segmented[self.num_features:2*self.num_features] = 0
+                self.__segmented[2*self.num_features:3*self.num_features] = 0
+                self.__umbra = um_mask
+                self.__pumbra = pu_mask
                 return
 
             for i in labels:
@@ -777,60 +974,92 @@ of nans</p>
 
 
                     # Further segment the umbra node again
-                    labeled, labels, sizes = self.group_pixels(pu)
-                    labels, sizes = self.remove_small_groups(labeled, labels, sizes, 10)
-                    labels, sizes = self.remove_percentage_max(labeled, labels, sizes)
-                    labels, sizes = self.largest_n_clusters(labels, sizes)
+                    labeled, labels, sizes = self.__group_pixels(pu)
+                    labels, sizes = self.__remove_small_groups(labeled, labels, sizes, 10)
+                    labels, sizes = self.__remove_percentage_max(labeled, labels, sizes)
+                    labels, sizes = self.__largest_n_clusters(labels, sizes)
 
                     for i in labels:
                         mask = labeled == i
-                        self.node_masks = np.concatenate((self.node_masks, mask[None,...]), axis = 0)
-                        self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(mask)))
-                        self.G.add_node(cur_node)
-                        cur_node += 1
+                        cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, &#34;penumbra&#34;)
                         pu_mask |= mask
 
                     # Further segment the umbra node again
-                    labeled, labels, sizes = self.group_pixels(um)
-                    labels, sizes = self.remove_small_groups(labeled, labels, sizes, 10)
-                    labels, sizes = self.remove_percentage_max(labeled, labels, sizes)
-                    labels, sizes = self.largest_n_clusters(labels, sizes)
+                    labeled, labels, sizes = self.__group_pixels(um)
+                    labels, sizes = self.__remove_small_groups(labeled, labels, sizes, 10)
+                    labels, sizes = self.__remove_percentage_max(labeled, labels, sizes)
+                    labels, sizes = self.__largest_n_clusters(labels, sizes)
 
                     for i in labels:
                         mask = labeled == i
-                        self.node_masks = np.concatenate((self.node_masks, mask[None,...]), axis = 0)
-                        self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(mask)))
-                        self.G.add_node(cur_node)
-                        cur_node += 1
+                        cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, &#34;umbra&#34;)
                         um_mask |= mask
 
                 else:
                     # Only umbra
                     um = mask &amp; (self.cont &lt;= t)
-                    self.node_masks = np.concatenate((self.node_masks, um[None,...]), axis = 0)
-                    self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(um)))
-                    self.G.add_node(cur_node)
-                    cur_node += 1
+                    cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, &#34;umbra&#34;)
                     um_mask |= um
             
             # Compute the segmented data set
-            self.segmented[NUM_FEATURES:2*NUM_FEATURES] = self.physical_features(um_mask)
-            self.segmented[2*NUM_FEATURES:3*NUM_FEATURES] = self.physical_features(pu_mask)
-            self.umbra = um_mask
-            self.pumbra = pu_mask
+            data, labels = self.physical_features(um_mask, &#34;um_&#34;)
+            self.__segmented[self.num_features:2*self.num_features] = data
+            self.__segmented_labels[self.num_features:2*self.num_features] = labels
 
-    # Grouping and filtering operations
-    def group_pixels(self, mask):
+            data, labels = self.physical_features(um_mask, &#34;pu_&#34;)
+            self.__segmented[2*self.num_features:3*self.num_features] = data
+            self.__segmented_labels[2*self.num_features:3*self.num_features] = labels
+
+            self.__umbra = um_mask
+            self.__pumbra = pu_mask
+
+    def __group_pixels(self, mask):
+        &#34;&#34;&#34;Groups pixels in a binary mask based on if they are touching
+
+        Args:
+            mask (np.array): A mask with binary pixels
+
+        Returns:
+            labeled: a mask that is labeled from 0 to number of groups (0 is the background) the size of the number in the label doesn&#39;t mean anything
+            labels: a list of labels in labeled
+            sizes: a list of sizes corresponding to each element in labels
+        &#34;&#34;&#34;
         labeled = label(mask, connectivity = 2)
         labels = np.unique(labeled)[1:]
         sizes = np.array([np.count_nonzero(labeled==i) for i in labels])
         return labeled, labels, sizes
-    def remove_small_groups(self, labeled, labels, sizes, p = 500):
+
+    def __remove_small_groups(self, labeled: np.array, labels: np.array, sizes: np.array, p = 500):
+        &#34;&#34;&#34;Removes groups of pixels smaller than p
+
+        Args:
+            labeled (np.array): The labeled array returned from group_pixels
+            labels (np.array): The distinct labels found in labeled
+            sizes (np.array): The size of each label in labels
+            p (int, optional): Smallest group size. Defaults to 500.
+
+        Returns:
+            labels: Labels filtered 
+            sizes: sizes filtered 
+        &#34;&#34;&#34;
         if len(sizes) == 0:
             return labels, sizes
         filt = np.argwhere((sizes &lt; p))
         return np.delete(labels, filt), np.delete(sizes, filt)
-    def remove_bordering_pixels(self, labeled, labels, sizes):
+
+    def __remove_bordering_pixels(self, labeled: np.array, labels: np.array, sizes: np.array):
+        &#34;&#34;&#34;Removes pixels that border the edge
+
+        Args:
+            labeled (np.array): The labeled array returned from group_pixels
+            labels (np.array): The distinct labels found in labeled
+            sizes (np.array): The size of each label in labels
+            p (int, optional): Smallest group size. Defaults to 500.
+
+        Returns:
+            labels: Labels filtered 
+            sizes: sizes filtered 
+        &#34;&#34;&#34;
         if len(sizes) == 0:
             return labels, sizes
         bordered = []
@@ -841,623 +1070,255 @@ of nans</p>
             if max(cols) == self.shape[1] - 1 or max(rows) == self.shape[0] - 1:
                 bordered.append(i)
         return np.delete(labels, bordered), np.delete(sizes, bordered)
-    def remove_percentage_max(self, labeled, labels, sizes, p = 0.1):
+
+    def __remove_percentage_max(self, labeled, labels, sizes, p = 0.1):
+        &#34;&#34;&#34;Removes pixels that border the edge
+
+        Args:
+            labeled (np.array): The labeled array returned from group_pixels
+            labels (np.array): The distinct labels found in labeled
+            sizes (np.array): The size of each label in labels
+            p (int, optional): Smallest group size. Defaults to 500.
+
+        Returns:
+            labels: Labels filtered 
+            sizes: sizes filtered 
+        &#34;&#34;&#34;
         if len(sizes) == 0:
             return labels, sizes
         filt = np.argwhere(sizes &lt; p * np.max(sizes))
         return np.delete(labels, filt), np.delete(sizes, filt)
-    def largest_n_clusters(self, labels, sizes, n = 6):
+
+    def __largest_n_clusters(self, labels, sizes, n = 6):
+        &#34;&#34;&#34;Removes pixels that border the edge
+
+        Args:
+            labeled (np.array): The labeled array returned from group_pixels
+            labels (np.array): The distinct labels found in labeled
+            sizes (np.array): The size of each label in labels
+            p (int, optional): Smallest group size. Defaults to 500.
+
+        Returns:
+            labels: Labels filtered 
+            sizes: sizes filtered 
+        &#34;&#34;&#34;
         if len(sizes) == 0:
             return labels, sizes
         n = min(n, len(labels))
         a = np.partition(sizes, -n)[-n]
         return labels[sizes &gt;= a], sizes[sizes &gt;= a]
 
-    def assert_background(self):
-        if self.background is None:
-            self.background = torch.zeros(self.shape, dtype=bool)
-            self.assert_neutral_lines()
-            self.assert_umbra_pumbra()
+    def __ar_add_node(self, data, cur_node, mask, type):
+        &#34;&#34;&#34;Adds a node to self graph and connects to all the previous nodes
 
-            #  node = {&#34;COM&#34; : (0, 0), &#34;MASK&#34; : ~(self.nl | self.umbra | self.pumbra)}
-            background = ~(self.nl | self.umbra | self.pumbra)
-            self.segmented[3*NUM_FEATURES:4*NUM_FEATURES] = self.physical_features(background)
-            self.background = background
+        Args:
+            data ([type]): [description]
+            cur_node ([type]): [description]
+            mask ([type]): [description]
 
-    def connect_edges(self):
-        self.assert_masks()
-        if not self.graph_edges_declared:
-            for i in range(len(self.node_masks) - 1):
-                for j in range(i + 1, len(self.node_masks)):
-                    if np.count_nonzero(binary_dilation(self.node_masks[i], square(3)) &amp; binary_dilation(self.node_masks[j], square(3))) &gt; 0:
-                        self.G.add_edge(i, j)
-            self.graph_edges_declared = True
-            
+        Returns:
+            [type]: [description]
+        &#34;&#34;&#34;
+        # Get the center of the node for plotting
+        x, y = np.where(mask)
+        x, y = int(np.mean(x)), int(np.mean(y))
 
-    # Tools
-    def moment(self, data):
-        avg = torch.mean(data)
-        std = torch.sqrt(torch.mean((data - avg)**2))
-        skw = torch.mean(((data - avg)/std)**3)
-        krt = torch.mean(((data - avg)/std)**4) - 3.0
-        return torch.tensor([avg, std, skw, krt])
+        self.__G.add_node(cur_node, v = data, pos = (y,x), type = type)
+        #self.__G.add_node(cur_node, v = data, pos = (0,100), type = type)
 
-    def norm(self, data):
-        n = 0
-        for i in data:
-            n += torch.abs(i)
-        return n
+        mask_dil = binary_dilation(mask, square(3))
 
+        for m in range(len(self.__node_masks)):
+            if np.count_nonzero(mask_dil &amp; self.__node_masks[m]) &gt; 0:
+                self.__G.add_edge(cur_node, m)
 
-    # Physical Properties
-    def z_moments(self, mask):
-        return self.moment(self.Bz[mask])
-    def phitot(self, mask):
-        return torch.sum(torch.abs(self.Bz[mask]))
-    def phitotabs(self, mask):
-        return torch.abs(torch.sum(self.Bz[mask]))
-    def h_moments(self, mask):
-        self.assert_Bh()
-        return self.moment(self.Bh[mask])
-    def gamma_moments(self, mask):
-        self.assert_gamma()
-        return self.moment(self.gamma[mask])
-    def B_grad_moments(self, mask):
-        self.assert_grad_B()
-        return self.moment(self.norm((self.grad_B_x[mask], self.grad_B_y[mask])))
-    def Bz_grad_moments(self, mask):
-        self.assert_grad_Bz()
-        return self.moment(self.norm((self.grad_Bz_x[mask], self.grad_Bz_y[mask])))
-    def Bh_grad_moments(self, mask):
-        self.assert_grad_Bh()
-        return self.moment(self.norm((self.grad_Bh_x[mask], self.grad_Bh_y[mask])))
-    def J_moments(self, mask):
-        self.assert_J()
-        return self.moment(self.J[mask])
-    def itot(self, mask):
-        self.assert_J()
-        return torch.sum(torch.abs(self.J[mask]))
-    def itotabs(self, mask):
-        self.assert_J()
-        return torch.abs(torch.sum(self.J[mask]))
-    def itot_polarity(self, mask):
-        self.assert_J()
-        return torch.abs(torch.sum(self.J[self.Bz &gt; 0 &amp; mask])) + torch.abs(torch.sum(self.J[self.Bz &lt; 0 &amp; mask]))
-    def Jh_moments(self, mask):
-        self.assert_Jh()
-        return self.moment(self.Jh[mask])
-    def ihtot(self, mask):
-        self.assert_Jh()
-        return torch.sum(torch.abs(self.Jh[mask]))
-    def ihtotabs(self, mask):
-        self.assert_Jh()
-        return torch.abs(torch.sum(self.Jh[mask]))
-    def twist_moments(self, mask):
-        self.assert_J()
-        return self.moment(self.J[mask] / self.Bz[mask])
-    # Too computationally intensive
-    #def twist_force_free_m(self):
-    #    pass
-    def hc_moments(self, mask):
-        self.assert_hc()
-        return self.moment(self.hc[mask])
-    def hctot(self, mask):
-        self.assert_hc()
-        return torch.sum(torch.abs(self.hc[mask]))
-    def hctotabs(self, mask):
-        self.assert_hc()
-        return torch.abs(torch.sum(self.hc[mask]))
-    def shear_moments(self, mask):
-        self.assert_shear() # Pretty big function call right here
-        return self.moment(self.shear[mask])
-    def rho_moments(self, mask):
-        self.assert_rho()
-        return self.moment(self.rho[mask])
-    def totrho(self, mask):
-        self.assert_rho()
-        return torch.sum(self.rho[mask])
-
-
-    # ASSERTIONS - designed so that each component is only calculated ONCE - example: if I want Bh,
-    # simply assert_Bh. If Bh already exists, then nothing is done
-    def assert_Bh(self):
-        if self.Bh is None:
-            self.Bh = self.norm((self.Bx, self.By))
-    def assert_gamma(self):
-        if self.gamma is None:
-            self.assert_Bh()
-            self.gamma = torch.arctan(self.Bz / self.Bh)
-    def assert_B(self):
-        if self.B is None:
-            self.B = self.norm((self.Bx, self.By, self.Bz))
-    def assert_grad_B(self):
-        if self.grad_B_x is None or self.grad_B_y is None:
-            self.assert_B()
-            self.grad_B_x, self.grad_B_y = gradient(self.B)
-    def assert_grad_Bh(self):
-        if self.grad_Bh_x is None or self.grad_Bh_y is None:
-            self.assert_Bh()
-            self.grad_Bh_x, self.grad_Bh_y = gradient(self.Bh)
-    def assert_grad_Bz(self):
-        if self.grad_Bz_x is None or self.grad_Bz_y is None:
-            self.grad_Bz_x, self.grad_Bz_y = gradient(self.Bz)
-    def assert_grad_Bx(self):
-        if self.grad_Bx_x is None or self.grad_Bx_y is None:
-            self.grad_Bx_x, self.grad_Bx_y = gradient(self.Bx)
-            self.grad_Bx_x = -self.grad_Bx_x
-    def assert_grad_By(self):
-        if self.grad_By_x is None or self.grad_By_y is None:
-            self.grad_By_x, self.grad_By_y = gradient(self.By)
-            self.grad_By_x = -self.grad_By_x
-    def assert_grad_Bm(self):
-        if self.grad_Bm is None:
-            self.assert_grad_B()
-            self.grad_Bm = self.norm((self.grad_B_x, self.grad_B_y))
-    def assert_J(self):
-        if self.J is None:
-            self.assert_grad_Bx()
-            self.assert_grad_By()
-            self.J = self.grad_By_x - self.grad_Bx_y
-    def assert_Jh(self):
-        if self.Jh is None:
-            self.assert_grad_Bx()
-            self.assert_grad_By()
-            self.assert_B()
-            self.Jh = (self.By * self.grad_Bx_y - self.Bx * self.grad_By_x) / self.B
-    def assert_hc(self):
-        if self.hc is None:
-            self.assert_J()
-            self.hc = self.Bz * self.J
-    def assert_shear(self):
-        if self.shear is None:
-            self.assert_Bp()
-            self.assert_B()
-            dot = self.Bx * self.Bpx + self.By * self.Bpy + self.Bz * self.Bpz
-            magp = self.norm((self.Bpx, self.Bpy, self.Bpz))
-            self.shear = torch.arccos(dot / (self.B * magp))
-    def assert_rho(self):
-        if self.rho is None:
-            self.assert_Bp()
-            self.rho = (self.B - self.norm((self.Bpx, self.Bpy, self.Bpz)))**2
-    def assert_Bp(self):
-        if self.Bpx is None or self.Bpy is None or self.Bpz is None:
-
-            Bz = F.pad(self.Bz, (radius, radius, radius, radius)).float()
-
-            dz = 0.0001
-            Xmx = Bz.shape[0]
-            Ymx = Bz.shape[1]
-
-            pot = torch.zeros(self.shape, device = dev).float()
-
-            # Distance kernel - a kernel with values filled in the &#34;circle&#34; (by def of norm) as the distance from
-            # the center multiplied by dz (for integration)
-
-            kern = dist_kern.to(dev)
-
-            # Convolution -- integrate over each pixel
-            pot = F.conv2d(Bz[None, None, ...], kern[None, None, ...])[0][0]
-
-            # Save potential
-            self.potential = pot
-
-            # Get Potential Fields
-            self.Bpz = self.Bz
-            grad = gradient(self.potential)
-            self.Bpx, self.Bpy = -grad[0], -grad[1]</code></pre>
+        self.__node_masks = np.concatenate((self.__node_masks, mask_dil[None,...]), axis = 0)
+        return cur_node + 1</code></pre>
 </details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="flares.fields.ActiveRegionParameters" href="fields.html#flares.fields.ActiveRegionParameters">ActiveRegionParameters</a></li>
+<li><a title="flares.fields.ActiveRegionFields" href="fields.html#flares.fields.ActiveRegionFields">ActiveRegionFields</a></li>
+</ul>
 <h3>Methods</h3>
 <dl>
-<dt id="flares.active_region.ActiveRegion.B_grad_moments"><code class="name flex">
-<span>def <span class="ident">B_grad_moments</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def B_grad_moments(self, mask):
-    self.assert_grad_B()
-    return self.moment(self.norm((self.grad_B_x[mask], self.grad_B_y[mask])))</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.Bh_grad_moments"><code class="name flex">
-<span>def <span class="ident">Bh_grad_moments</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def Bh_grad_moments(self, mask):
-    self.assert_grad_Bh()
-    return self.moment(self.norm((self.grad_Bh_x[mask], self.grad_Bh_y[mask])))</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.Bz_grad_moments"><code class="name flex">
-<span>def <span class="ident">Bz_grad_moments</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def Bz_grad_moments(self, mask):
-    self.assert_grad_Bz()
-    return self.moment(self.norm((self.grad_Bz_x[mask], self.grad_Bz_y[mask])))</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.J_moments"><code class="name flex">
-<span>def <span class="ident">J_moments</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def J_moments(self, mask):
-    self.assert_J()
-    return self.moment(self.J[mask])</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.Jh_moments"><code class="name flex">
-<span>def <span class="ident">Jh_moments</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def Jh_moments(self, mask):
-    self.assert_Jh()
-    return self.moment(self.Jh[mask])</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.assert_B"><code class="name flex">
-<span>def <span class="ident">assert_B</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def assert_B(self):
-    if self.B is None:
-        self.B = self.norm((self.Bx, self.By, self.Bz))</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.assert_Bh"><code class="name flex">
-<span>def <span class="ident">assert_Bh</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def assert_Bh(self):
-    if self.Bh is None:
-        self.Bh = self.norm((self.Bx, self.By))</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.assert_Bp"><code class="name flex">
-<span>def <span class="ident">assert_Bp</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def assert_Bp(self):
-    if self.Bpx is None or self.Bpy is None or self.Bpz is None:
-
-        Bz = F.pad(self.Bz, (radius, radius, radius, radius)).float()
-
-        dz = 0.0001
-        Xmx = Bz.shape[0]
-        Ymx = Bz.shape[1]
-
-        pot = torch.zeros(self.shape, device = dev).float()
-
-        # Distance kernel - a kernel with values filled in the &#34;circle&#34; (by def of norm) as the distance from
-        # the center multiplied by dz (for integration)
-
-        kern = dist_kern.to(dev)
-
-        # Convolution -- integrate over each pixel
-        pot = F.conv2d(Bz[None, None, ...], kern[None, None, ...])[0][0]
-
-        # Save potential
-        self.potential = pot
-
-        # Get Potential Fields
-        self.Bpz = self.Bz
-        grad = gradient(self.potential)
-        self.Bpx, self.Bpy = -grad[0], -grad[1]</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.assert_J"><code class="name flex">
-<span>def <span class="ident">assert_J</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def assert_J(self):
-    if self.J is None:
-        self.assert_grad_Bx()
-        self.assert_grad_By()
-        self.J = self.grad_By_x - self.grad_Bx_y</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.assert_Jh"><code class="name flex">
-<span>def <span class="ident">assert_Jh</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def assert_Jh(self):
-    if self.Jh is None:
-        self.assert_grad_Bx()
-        self.assert_grad_By()
-        self.assert_B()
-        self.Jh = (self.By * self.grad_Bx_y - self.Bx * self.grad_By_x) / self.B</code></pre>
-</details>
-</dd>
 <dt id="flares.active_region.ActiveRegion.assert_background"><code class="name flex">
 <span>def <span class="ident">assert_background</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Generates a background mask. If background is already generated, does nothing
+Background is simply <span><span class="MathJax_Preview">\neg (Umbra \cup Penumbra \cup Neutral Line)</span><script type="math/tex; mode=display">\neg (Umbra \cup Penumbra \cup Neutral Line)</script></span></p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def assert_background(self):
-    if self.background is None:
-        self.background = torch.zeros(self.shape, dtype=bool)
+    &#34;&#34;&#34;Generates a background mask. If background is already generated, does nothing
+    Background is simply $$\\neg (Umbra \\cup Penumbra \\cup Neutral Line)$$
+    &#34;&#34;&#34;
+    if self.__background is None:
+        self.__background = torch.zeros(self.shape, dtype=bool)
         self.assert_neutral_lines()
         self.assert_umbra_pumbra()
 
-        #  node = {&#34;COM&#34; : (0, 0), &#34;MASK&#34; : ~(self.nl | self.umbra | self.pumbra)}
-        background = ~(self.nl | self.umbra | self.pumbra)
-        self.segmented[3*NUM_FEATURES:4*NUM_FEATURES] = self.physical_features(background)
-        self.background = background</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.assert_gamma"><code class="name flex">
-<span>def <span class="ident">assert_gamma</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def assert_gamma(self):
-    if self.gamma is None:
-        self.assert_Bh()
-        self.gamma = torch.arctan(self.Bz / self.Bh)</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.assert_grad_B"><code class="name flex">
-<span>def <span class="ident">assert_grad_B</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def assert_grad_B(self):
-    if self.grad_B_x is None or self.grad_B_y is None:
-        self.assert_B()
-        self.grad_B_x, self.grad_B_y = gradient(self.B)</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.assert_grad_Bh"><code class="name flex">
-<span>def <span class="ident">assert_grad_Bh</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def assert_grad_Bh(self):
-    if self.grad_Bh_x is None or self.grad_Bh_y is None:
-        self.assert_Bh()
-        self.grad_Bh_x, self.grad_Bh_y = gradient(self.Bh)</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.assert_grad_Bm"><code class="name flex">
-<span>def <span class="ident">assert_grad_Bm</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def assert_grad_Bm(self):
-    if self.grad_Bm is None:
-        self.assert_grad_B()
-        self.grad_Bm = self.norm((self.grad_B_x, self.grad_B_y))</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.assert_grad_Bx"><code class="name flex">
-<span>def <span class="ident">assert_grad_Bx</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def assert_grad_Bx(self):
-    if self.grad_Bx_x is None or self.grad_Bx_y is None:
-        self.grad_Bx_x, self.grad_Bx_y = gradient(self.Bx)
-        self.grad_Bx_x = -self.grad_Bx_x</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.assert_grad_By"><code class="name flex">
-<span>def <span class="ident">assert_grad_By</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def assert_grad_By(self):
-    if self.grad_By_x is None or self.grad_By_y is None:
-        self.grad_By_x, self.grad_By_y = gradient(self.By)
-        self.grad_By_x = -self.grad_By_x</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.assert_grad_Bz"><code class="name flex">
-<span>def <span class="ident">assert_grad_Bz</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def assert_grad_Bz(self):
-    if self.grad_Bz_x is None or self.grad_Bz_y is None:
-        self.grad_Bz_x, self.grad_Bz_y = gradient(self.Bz)</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.assert_hc"><code class="name flex">
-<span>def <span class="ident">assert_hc</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def assert_hc(self):
-    if self.hc is None:
-        self.assert_J()
-        self.hc = self.Bz * self.J</code></pre>
+        background = ~(self.__nl | self.__umbra | self.__pumbra)
+
+        # Update dataset
+        data, labels = self.physical_features(background, &#34;bckg_&#34;)
+        self.__segmented[2*self.num_features:3*self.num_features] = data
+        self.__segmented_labels[2*self.num_features:3*self.num_features] = labels
+
+        self.__background = background</code></pre>
 </details>
 </dd>
 <dt id="flares.active_region.ActiveRegion.assert_masks"><code class="name flex">
 <span>def <span class="ident">assert_masks</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>One function that generates all three masks. If all three masks are already
+generated, this function does nothing</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def assert_masks(self):
+    &#34;&#34;&#34;One function that generates all three masks. If all three masks are already
+    generated, this function does nothing
+    &#34;&#34;&#34;
     self.assert_neutral_lines()
     self.assert_umbra_pumbra()
     self.assert_background()</code></pre>
 </details>
 </dd>
 <dt id="flares.active_region.ActiveRegion.assert_neutral_lines"><code class="name flex">
-<span>def <span class="ident">assert_neutral_lines</span></span>(<span>self, kernel_radius=1)</span>
+<span>def <span class="ident">assert_neutral_lines</span></span>(<span>self, radius=3, thresh=150)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Generates neutral lines using morphological operations and a flux threshold
+finds neutral lines using the method described by Schrijver in</p>
+<p><strong>C. J. Schrijver. A characteristic magnetic field pattern associated with all major solar flares and its use in flare forecasting. <em>The Astrophysical Journal, 655(2), 2007.</em></strong></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>radius</code></strong> :&ensp;<code>int</code>, optional</dt>
+<dd>The found neutral line is one pixel thick, so dilating it slightly adds the surrounding neighborhood. This radius</dd>
+<dt>is passed to sklearn.morphology.square(radius) in the call to sklearn.morphology.binary_dilation. Defaults to 3</dt>
+<dt><strong><code>thresh</code></strong> :&ensp;<code>int</code>, optional</dt>
+<dd>Flux threshold. Defaults to 150 (as used by Schjriver et. al).</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def assert_neutral_lines(self, kernel_radius = 1):
-    if self.nl is None:
+<pre><code class="python">def assert_neutral_lines(self, radius = 3, thresh = 150):
+    &#34;&#34;&#34;Generates neutral lines using morphological operations and a flux threshold
+    finds neutral lines using the method described by Schrijver in
+    
+    **C. J. Schrijver. A characteristic magnetic field pattern associated with all major solar flares and its use in flare forecasting. *The Astrophysical Journal, 655(2), 2007.***
+
+
+    Args:
+        radius (int, optional): The found neutral line is one pixel thick, so dilating it slightly adds the surrounding neighborhood. This radius
+        is passed to sklearn.morphology.square(radius) in the call to sklearn.morphology.binary_dilation. Defaults to 3
+        thresh (int, optional): Flux threshold. Defaults to 150 (as used by Schjriver et. al).
+    &#34;&#34;&#34;
+    if self.__nl is None:
         # Find neutral Lines
         thresh = 150
-        nl_mask = binary_dilation(self.Bz &lt; -thresh, square(3)) &amp; binary_dilation(self.Bz &gt; thresh, square(3))
+        nl_mask = binary_dilation(self.Bz &lt; -thresh, square(radius)) &amp; binary_dilation(self.Bz &gt; thresh, square(radius))
 
 
-        labeled, labels, sizes = self.group_pixels(nl_mask)
-        labels, sizes = self.remove_small_groups(labeled, labels, sizes, 10)
-        labels, sizes = self.remove_percentage_max(labeled, labels, sizes)
-        labels, sizes = self.largest_n_clusters(labels, sizes)
+        labeled, labels, sizes = self.__group_pixels(nl_mask)
+        labels, sizes = self.__remove_small_groups(labeled, labels, sizes, 10)
+        labels, sizes = self.__remove_percentage_max(labeled, labels, sizes)
+        labels, sizes = self.__largest_n_clusters(labels, sizes)
 
         # Add all the graph nodes
         nl_mask = np.zeros(self.shape, dtype = bool)
-        cur_node = len(self.node_masks)
+        cur_node = len(self.__node_masks)
 
         if len(sizes) == 0:
-            self.segmented[0:NUM_FEATURES] = 0
-            self.nl = nl_mask
+            self.__segmented[0:self.num_features] = 0
+            self.__nl = nl_mask
             return
 
         for i in labels:
             mask = labeled == i
-            self.node_masks = np.concatenate((self.node_masks, mask[None,...]), axis = 0)
-            self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(mask)))
-            self.G.add_node(cur_node)
-            cur_node += 1
+            cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, &#34;neutral line&#34;)
             nl_mask |= mask
 
         # Compute the segmented data set
-        self.segmented[0:NUM_FEATURES] = self.physical_features(nl_mask)
-        self.nl = nl_mask</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.assert_rho"><code class="name flex">
-<span>def <span class="ident">assert_rho</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def assert_rho(self):
-    if self.rho is None:
-        self.assert_Bp()
-        self.rho = (self.B - self.norm((self.Bpx, self.Bpy, self.Bpz)))**2</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.assert_shear"><code class="name flex">
-<span>def <span class="ident">assert_shear</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def assert_shear(self):
-    if self.shear is None:
-        self.assert_Bp()
-        self.assert_B()
-        dot = self.Bx * self.Bpx + self.By * self.Bpy + self.Bz * self.Bpz
-        magp = self.norm((self.Bpx, self.Bpy, self.Bpz))
-        self.shear = torch.arccos(dot / (self.B * magp))</code></pre>
+        data, labels = self.physical_features(nl_mask, &#34;nl_&#34;)
+        self.__segmented[0:self.num_features] = data
+        self.__segmented_labels[0:self.num_features] = labels
+        self.__nl = nl_mask</code></pre>
 </details>
 </dd>
 <dt id="flares.active_region.ActiveRegion.assert_umbra_pumbra"><code class="name flex">
 <span>def <span class="ident">assert_umbra_pumbra</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>An original algorithm for detecting umbras and penumbras from a continuum image</p>
+<p>High Level Algorithm:</p>
+<ol>
+<li>
+<p>bound continuum between 0 and 255</p>
+</li>
+<li>
+<p>use an adaptive filter on the bounded continuum</p>
+</li>
+<li>
+<p>group and label touching pixels </p>
+</li>
+<li>
+<p>remove groups of pixels that are less than 500 from those remaining (if any) </p>
+</li>
+<li>
+<p>remove groups of pixels that border the image (usually noise) from those remaining (if any) </p>
+</li>
+<li>
+<p>remove all groups that are smaller than 10% of the size of the maximum group size from those remaining (if any)
+</p>
+</li>
+<li>
+<p>remove take the largest 6 clusters from those remaining (if any) </p>
+</li>
+<li>
+<p>The remaining groups are <strong>penumbra outlines</strong>, repeat the above process isolated only to the penumbra outlines
+if the difference between maximum and minimum flux in the mask is greater than 21000 and the resulting clusters are umbras</p>
+</li>
+<li>
+<p>Keep the remaining 6 largest umbras</p>
+</li>
+</ol></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def assert_umbra_pumbra(self):
-    if self.pumbra is None or self.umbra is None:
+    &#34;&#34;&#34;An original algorithm for detecting umbras and penumbras from a continuum image
+
+    High Level Algorithm:
+
+    1. bound continuum between 0 and 255
+
+    2. use an adaptive filter on the bounded continuum
+
+    3. group and label touching pixels 
+
+    4. remove groups of pixels that are less than 500 from those remaining (if any) 
+
+    5. remove groups of pixels that border the image (usually noise) from those remaining (if any) 
+
+    6. remove all groups that are smaller than 10% of the size of the maximum group size from those remaining (if any)  
+
+    7. remove take the largest 6 clusters from those remaining (if any) 
+
+    8. The remaining groups are **penumbra outlines**, repeat the above process isolated only to the penumbra outlines
+    if the difference between maximum and minimum flux in the mask is greater than 21000 and the resulting clusters are umbras
+
+    9. Keep the remaining 6 largest umbras
+    &#34;&#34;&#34;
+    if self.__pumbra is None or self.__umbra is None:
         cont_bounded = (255 * (self.cont - np.min(self.cont)) / np.ptp(self.cont)).astype(np.uint8)
 
         block_size = np.min(self.shape)
@@ -1467,21 +1328,21 @@ of nans</p>
         offset = 10
         binary_adaptive = cont_bounded &lt; (threshold_local(cont_bounded, block_size, offset = offset) - offset)
 
-        labeled_0, labels, sizes = self.group_pixels(binary_adaptive)
-        labels, sizes = self.remove_small_groups(labeled_0, labels, sizes)
-        labels, sizes = self.remove_bordering_pixels(labeled_0, labels, sizes)
-        labels, sizes = self.remove_percentage_max(labeled_0, labels, sizes)
-        labels, sizes = self.largest_n_clusters(labels, sizes)
+        labeled_0, labels, sizes = self.__group_pixels(binary_adaptive)
+        labels, sizes = self.__remove_small_groups(labeled_0, labels, sizes)
+        labels, sizes = self.__remove_bordering_pixels(labeled_0, labels, sizes)
+        labels, sizes = self.__remove_percentage_max(labeled_0, labels, sizes)
+        labels, sizes = self.__largest_n_clusters(labels, sizes)
 
         um_mask = np.zeros(self.shape, dtype = bool)
         pu_mask = np.zeros(self.shape, dtype = bool)
         cur_node = 0
 
         if len(sizes) == 0:
-            self.segmented[NUM_FEATURES:2*NUM_FEATURES] = 0
-            self.segmented[2*NUM_FEATURES:3*NUM_FEATURES] = 0
-            self.umbra = um_mask
-            self.pumbra = pu_mask
+            self.__segmented[self.num_features:2*self.num_features] = 0
+            self.__segmented[2*self.num_features:3*self.num_features] = 0
+            self.__umbra = um_mask
+            self.__pumbra = pu_mask
             return
 
         for i in labels:
@@ -1496,518 +1357,354 @@ of nans</p>
 
 
                 # Further segment the umbra node again
-                labeled, labels, sizes = self.group_pixels(pu)
-                labels, sizes = self.remove_small_groups(labeled, labels, sizes, 10)
-                labels, sizes = self.remove_percentage_max(labeled, labels, sizes)
-                labels, sizes = self.largest_n_clusters(labels, sizes)
+                labeled, labels, sizes = self.__group_pixels(pu)
+                labels, sizes = self.__remove_small_groups(labeled, labels, sizes, 10)
+                labels, sizes = self.__remove_percentage_max(labeled, labels, sizes)
+                labels, sizes = self.__largest_n_clusters(labels, sizes)
 
                 for i in labels:
                     mask = labeled == i
-                    self.node_masks = np.concatenate((self.node_masks, mask[None,...]), axis = 0)
-                    self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(mask)))
-                    self.G.add_node(cur_node)
-                    cur_node += 1
+                    cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, &#34;penumbra&#34;)
                     pu_mask |= mask
 
                 # Further segment the umbra node again
-                labeled, labels, sizes = self.group_pixels(um)
-                labels, sizes = self.remove_small_groups(labeled, labels, sizes, 10)
-                labels, sizes = self.remove_percentage_max(labeled, labels, sizes)
-                labels, sizes = self.largest_n_clusters(labels, sizes)
+                labeled, labels, sizes = self.__group_pixels(um)
+                labels, sizes = self.__remove_small_groups(labeled, labels, sizes, 10)
+                labels, sizes = self.__remove_percentage_max(labeled, labels, sizes)
+                labels, sizes = self.__largest_n_clusters(labels, sizes)
 
                 for i in labels:
                     mask = labeled == i
-                    self.node_masks = np.concatenate((self.node_masks, mask[None,...]), axis = 0)
-                    self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(mask)))
-                    self.G.add_node(cur_node)
-                    cur_node += 1
+                    cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, &#34;umbra&#34;)
                     um_mask |= mask
 
             else:
                 # Only umbra
                 um = mask &amp; (self.cont &lt;= t)
-                self.node_masks = np.concatenate((self.node_masks, um[None,...]), axis = 0)
-                self.node_feature_vecs = np.vstack((self.node_feature_vecs, self.physical_features(um)))
-                self.G.add_node(cur_node)
-                cur_node += 1
+                cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, &#34;umbra&#34;)
                 um_mask |= um
         
         # Compute the segmented data set
-        self.segmented[NUM_FEATURES:2*NUM_FEATURES] = self.physical_features(um_mask)
-        self.segmented[2*NUM_FEATURES:3*NUM_FEATURES] = self.physical_features(pu_mask)
-        self.umbra = um_mask
-        self.pumbra = pu_mask</code></pre>
+        data, labels = self.physical_features(um_mask, &#34;um_&#34;)
+        self.__segmented[self.num_features:2*self.num_features] = data
+        self.__segmented_labels[self.num_features:2*self.num_features] = labels
+
+        data, labels = self.physical_features(um_mask, &#34;pu_&#34;)
+        self.__segmented[2*self.num_features:3*self.num_features] = data
+        self.__segmented_labels[2*self.num_features:3*self.num_features] = labels
+
+        self.__umbra = um_mask
+        self.__pumbra = pu_mask</code></pre>
 </details>
 </dd>
-<dt id="flares.active_region.ActiveRegion.come_back_from_gpu"><code class="name flex">
-<span>def <span class="ident">come_back_from_gpu</span></span>(<span>self)</span>
+<dt id="flares.active_region.ActiveRegion.get_baseline"><code class="name flex">
+<span>def <span class="ident">get_baseline</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def come_back_from_gpu(self):
-    self.Bz = self.Bz.detach().cpu().numpy()
-    self.Bx = self.Bx.detach().cpu().numpy()
-    self.By = self.By.detach().cpu().numpy()
-    self.cont = self.cont.detach().cpu().numpy()</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.connect_edges"><code class="name flex">
-<span>def <span class="ident">connect_edges</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def connect_edges(self):
-    self.assert_masks()
-    if not self.graph_edges_declared:
-        for i in range(len(self.node_masks) - 1):
-            for j in range(i + 1, len(self.node_masks)):
-                if np.count_nonzero(binary_dilation(self.node_masks[i], square(3)) &amp; binary_dilation(self.node_masks[j], square(3))) &gt; 0:
-                    self.G.add_edge(i, j)
-        self.graph_edges_declared = True</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.gamma_moments"><code class="name flex">
-<span>def <span class="ident">gamma_moments</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def gamma_moments(self, mask):
-    self.assert_gamma()
-    return self.moment(self.gamma[mask])</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.group_pixels"><code class="name flex">
-<span>def <span class="ident">group_pixels</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def group_pixels(self, mask):
-    labeled = label(mask, connectivity = 2)
-    labels = np.unique(labeled)[1:]
-    sizes = np.array([np.count_nonzero(labeled==i) for i in labels])
-    return labeled, labels, sizes</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.h_moments"><code class="name flex">
-<span>def <span class="ident">h_moments</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def h_moments(self, mask):
-    self.assert_Bh()
-    return self.moment(self.Bh[mask])</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.hc_moments"><code class="name flex">
-<span>def <span class="ident">hc_moments</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def hc_moments(self, mask):
-    self.assert_hc()
-    return self.moment(self.hc[mask])</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.hctot"><code class="name flex">
-<span>def <span class="ident">hctot</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def hctot(self, mask):
-    self.assert_hc()
-    return torch.sum(torch.abs(self.hc[mask]))</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.hctotabs"><code class="name flex">
-<span>def <span class="ident">hctotabs</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def hctotabs(self, mask):
-    self.assert_hc()
-    return torch.abs(torch.sum(self.hc[mask]))</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.ihtot"><code class="name flex">
-<span>def <span class="ident">ihtot</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def ihtot(self, mask):
-    self.assert_Jh()
-    return torch.sum(torch.abs(self.Jh[mask]))</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.ihtotabs"><code class="name flex">
-<span>def <span class="ident">ihtotabs</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def ihtotabs(self, mask):
-    self.assert_Jh()
-    return torch.abs(torch.sum(self.Jh[mask]))</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.itot"><code class="name flex">
-<span>def <span class="ident">itot</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def itot(self, mask):
-    self.assert_J()
-    return torch.sum(torch.abs(self.J[mask]))</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.itot_polarity"><code class="name flex">
-<span>def <span class="ident">itot_polarity</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def itot_polarity(self, mask):
-    self.assert_J()
-    return torch.abs(torch.sum(self.J[self.Bz &gt; 0 &amp; mask])) + torch.abs(torch.sum(self.J[self.Bz &lt; 0 &amp; mask]))</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.itotabs"><code class="name flex">
-<span>def <span class="ident">itotabs</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def itotabs(self, mask):
-    self.assert_J()
-    return torch.abs(torch.sum(self.J[mask]))</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.largest_n_clusters"><code class="name flex">
-<span>def <span class="ident">largest_n_clusters</span></span>(<span>self, labels, sizes, n=6)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def largest_n_clusters(self, labels, sizes, n = 6):
-    if len(sizes) == 0:
-        return labels, sizes
-    n = min(n, len(labels))
-    a = np.partition(sizes, -n)[-n]
-    return labels[sizes &gt;= a], sizes[sizes &gt;= a]</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.moment"><code class="name flex">
-<span>def <span class="ident">moment</span></span>(<span>self, data)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def moment(self, data):
-    avg = torch.mean(data)
-    std = torch.sqrt(torch.mean((data - avg)**2))
-    skw = torch.mean(((data - avg)/std)**3)
-    krt = torch.mean(((data - avg)/std)**4) - 3.0
-    return torch.tensor([avg, std, skw, krt])</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.norm"><code class="name flex">
-<span>def <span class="ident">norm</span></span>(<span>self, data)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def norm(self, data):
-    n = 0
-    for i in data:
-        n += torch.abs(i)
-    return n</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.phitot"><code class="name flex">
-<span>def <span class="ident">phitot</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def phitot(self, mask):
-    return torch.sum(torch.abs(self.Bz[mask]))</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.phitotabs"><code class="name flex">
-<span>def <span class="ident">phitotabs</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def phitotabs(self, mask):
-    return torch.abs(torch.sum(self.Bz[mask]))</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.physical_features"><code class="name flex">
-<span>def <span class="ident">physical_features</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Extracts the physical fetures from the active region.</p>
-<h2 id="args">Args</h2>
-<dl>
-<dt><strong><code>mask</code></strong> :&ensp;<code>Numpy boolean Array</code> of <code>the same shape as self</code></dt>
-<dd>A mask (subset) of self to extract physical </dd>
-</dl>
-<p>features on. ie, which pixels of self should this function compute</p>
+<div class="desc"><p>Get function for baseline</p>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>1 dimensional Numpy array</code></dt>
-<dd>an array with all of the physical features computed on the subset provided by mask</dd>
+<dt><code>numpy array</code></dt>
+<dd>baseline data set</dd>
 </dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def physical_features(self, mask):
-    &#34;&#34;&#34;Extracts the physical fetures from the active region.
-
-    Args:
-        mask (Numpy boolean Array of the same shape as self): A mask (subset) of self to extract physical 
-        features on. ie, which pixels of self should this function compute
+<pre><code class="python">def get_baseline(self):
+    &#34;&#34;&#34;Get function for baseline
 
     Returns:
-        1 dimensional Numpy array: an array with all of the physical features computed on the subset provided by mask
+        numpy array: baseline data set
     &#34;&#34;&#34;
-    mask = torch.from_numpy(mask).to(dev)
-    self.switch_to_gpu()
+    return self.__baseline, self.__baseline_labels</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.get_graph"><code class="name flex">
+<span>def <span class="ident">get_graph</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Gets the sharps data and labels</p>
+<p>Sharps data is the data JSOC calculates - good baseline</p>
+<h2 id="returns">Returns</h2>
+<p>data, labels</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_graph(self):
+    &#34;&#34;&#34;Gets the sharps data and labels
 
-    moment_features = torch.tensor([
-        *self.z_moments(mask), \
-        *self.h_moments(mask), \
-        *self.gamma_moments(mask), \
-        *self.B_grad_moments(mask), \
-        *self.Bz_grad_moments(mask), \
-        *self.Bh_grad_moments(mask), \
-        *self.J_moments(mask), \
-        *self.Jh_moments(mask), \
-        *self.twist_moments(mask), \
-        *self.hc_moments(mask), \
-        *self.shear_moments(mask), \
-        *self.rho_moments(mask)
-        ])
-    val = torch.tensor([
-        self.phitot(mask), \
-        self.phitotabs(mask), \
-        self.itot(mask), \
-        self.itotabs(mask), \
-        self.hctot(mask), \
-        self.hctotabs(mask), \
-        self.totrho(mask), \
-        *moment_features
-        ])
-    self.come_back_from_gpu()
-    mask = mask.detach().cpu().numpy()
-    return val</code></pre>
+    Sharps data is the data JSOC calculates - good baseline
+
+    Returns:
+        data, labels
+    &#34;&#34;&#34;
+    self.assert_masks()
+    return self.__G, self.__G_labels</code></pre>
 </details>
 </dd>
-<dt id="flares.active_region.ActiveRegion.remove_bordering_pixels"><code class="name flex">
-<span>def <span class="ident">remove_bordering_pixels</span></span>(<span>self, labeled, labels, sizes)</span>
+<dt id="flares.active_region.ActiveRegion.get_segmented"><code class="name flex">
+<span>def <span class="ident">get_segmented</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Get function for segmented</p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>numpy array</code></dt>
+<dd>segmented data set</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def remove_bordering_pixels(self, labeled, labels, sizes):
-    if len(sizes) == 0:
-        return labels, sizes
-    bordered = []
-    for i in range(len(labels)):
-        rows, cols = np.where(labeled == labels[i])
-        if min(rows) == 0 or min(cols) == 0:
-            bordered.append(i)
-        if max(cols) == self.shape[1] - 1 or max(rows) == self.shape[0] - 1:
-            bordered.append(i)
-    return np.delete(labels, bordered), np.delete(sizes, bordered)</code></pre>
+<pre><code class="python">def get_segmented(self):
+    &#34;&#34;&#34;Get function for segmented
+
+    Returns:
+        numpy array: segmented data set 
+    &#34;&#34;&#34;
+    self.assert_masks()
+    return self.__segmented, self.__segmented_labels</code></pre>
 </details>
 </dd>
-<dt id="flares.active_region.ActiveRegion.remove_percentage_max"><code class="name flex">
-<span>def <span class="ident">remove_percentage_max</span></span>(<span>self, labeled, labels, sizes, p=0.1)</span>
+<dt id="flares.active_region.ActiveRegion.get_sharps"><code class="name flex">
+<span>def <span class="ident">get_sharps</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Gets the sharps data and labels</p>
+<p>Sharps data is the data JSOC calculates - good baseline</p>
+<h2 id="returns">Returns</h2>
+<p>data, labels</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def remove_percentage_max(self, labeled, labels, sizes, p = 0.1):
-    if len(sizes) == 0:
-        return labels, sizes
-    filt = np.argwhere(sizes &lt; p * np.max(sizes))
-    return np.delete(labels, filt), np.delete(sizes, filt)</code></pre>
+<pre><code class="python">def get_sharps(self):
+    &#34;&#34;&#34;Gets the sharps data and labels
+
+    Sharps data is the data JSOC calculates - good baseline
+
+    Returns:
+        data, labels
+    &#34;&#34;&#34;
+    return self.__sharps, self.__sharps_labels</code></pre>
 </details>
 </dd>
-<dt id="flares.active_region.ActiveRegion.remove_small_groups"><code class="name flex">
-<span>def <span class="ident">remove_small_groups</span></span>(<span>self, labeled, labels, sizes, p=500)</span>
+<dt id="flares.active_region.ActiveRegion.show_background"><code class="name flex">
+<span>def <span class="ident">show_background</span></span>(<span>self, axs_orig, axs_seg)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Shows the background segmented next to the continuum</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>axs_orig</code></strong> :&ensp;<code>matplotlib axis</code></dt>
+<dd>The axis for the unsegmented image</dd>
+<dt><strong><code>axs_seg</code></strong> :&ensp;<code>matplotlib axis</code></dt>
+<dd>The axis for the segmented image</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def remove_small_groups(self, labeled, labels, sizes, p = 500):
-    if len(sizes) == 0:
-        return labels, sizes
-    filt = np.argwhere((sizes &lt; p))
-    return np.delete(labels, filt), np.delete(sizes, filt)</code></pre>
+<pre><code class="python">def show_background(self, axs_orig, axs_seg):
+    &#34;&#34;&#34;Shows the background segmented next to the continuum
+
+    Args:
+        axs_orig (matplotlib axis): The axis for the unsegmented image
+        axs_seg (matplotlib axis): The axis for the segmented image
+    &#34;&#34;&#34;
+    self.assert_masks()
+    axs_orig.imshow(self.cont, cmap = &#34;gray&#34;)
+    axs_seg.imshow(~self.__background, cmap = &#34;gray&#34;)
+    axs_orig.axis(False)
+    axs_seg.axis(False)</code></pre>
 </details>
 </dd>
-<dt id="flares.active_region.ActiveRegion.rho_moments"><code class="name flex">
-<span>def <span class="ident">rho_moments</span></span>(<span>self, mask)</span>
+<dt id="flares.active_region.ActiveRegion.show_graph"><code class="name flex">
+<span>def <span class="ident">show_graph</span></span>(<span>self, axs_cont, axs_seg)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Plots the continuum next to segmented graph with nodes
+Located on the graph with colors</p>
+<p>Note that umbras and penumbras are generally going to be very close to one another
+This is because the umbra is near the center of the penumbra so their centers are going
+to be close - there are a few good examples of nodes that work well - see documentation/guides</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>axs_cont</code></strong> :&ensp;<code>axis</code></dt>
+<dd>The continuum Axis </dd>
+<dt><strong><code>axs_seg</code></strong> :&ensp;<code>axis</code></dt>
+<dd>The segmented axis</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def rho_moments(self, mask):
-    self.assert_rho()
-    return self.moment(self.rho[mask])</code></pre>
+<pre><code class="python">def show_graph(self, axs_cont, axs_seg):
+    &#34;&#34;&#34;Plots the continuum next to segmented graph with nodes
+    Located on the graph with colors
+    
+    Note that umbras and penumbras are generally going to be very close to one another
+    This is because the umbra is near the center of the penumbra so their centers are going
+    to be close - there are a few good examples of nodes that work well - see documentation/guides
+
+    Args:
+        axs_cont (axis): The continuum Axis 
+        axs_seg (axis): The segmented axis
+    &#34;&#34;&#34;
+    self.assert_masks()
+
+    color_keys = {&#34;penumbra&#34; : 1.0, &#34;umbra&#34; : 0.5714285714285714, &#34;nl&#34; : 0.0}
+    values = [color_keys.get(x[1][&#34;type&#34;], 0.25) for x in self.__G.nodes.data()]
+    pos = nx.get_node_attributes(self.__G, &#34;pos&#34;)
+
+    axs_cont.imshow(self.cont)
+    nx.draw(self.__G, pos, axs_cont, node_size = 10, cmap = plt.get_cmap(&#39;viridis&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)
+    axs_seg.imshow(self.__umbra | self.__pumbra | self.__nl, cmap = &#34;gray&#34;)
+    nx.draw(self.__G, pos, axs_seg, node_size = 10, cmap = plt.get_cmap(&#39;viridis&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)</code></pre>
 </details>
 </dd>
-<dt id="flares.active_region.ActiveRegion.shear_moments"><code class="name flex">
-<span>def <span class="ident">shear_moments</span></span>(<span>self, mask)</span>
+<dt id="flares.active_region.ActiveRegion.show_neutral_line"><code class="name flex">
+<span>def <span class="ident">show_neutral_line</span></span>(<span>self, axs_orig, axs_seg)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Shows the neutral line segmented next to the line of sight magnetic field</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>axs_orig</code></strong> :&ensp;<code>matplotlib axis</code></dt>
+<dd>The axis for the unsegmented image</dd>
+<dt><strong><code>axs_seg</code></strong> :&ensp;<code>matplotlib axis</code></dt>
+<dd>The axis for the segmented image</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def shear_moments(self, mask):
-    self.assert_shear() # Pretty big function call right here
-    return self.moment(self.shear[mask])</code></pre>
+<pre><code class="python">def show_neutral_line(self, axs_orig, axs_seg):
+    &#34;&#34;&#34;Shows the neutral line segmented next to the line of sight magnetic field
+
+    Args:
+        axs_orig (matplotlib axis): The axis for the unsegmented image
+        axs_seg (matplotlib axis): The axis for the segmented image
+    &#34;&#34;&#34;
+    self.assert_masks()
+    axs_orig.imshow(self.Bz, cmap = &#34;gray&#34;)
+    axs_seg.imshow(~self.__nl, cmap = &#34;gray&#34;)
+    axs_orig.axis(False)
+    axs_seg.axis(False)</code></pre>
 </details>
 </dd>
-<dt id="flares.active_region.ActiveRegion.switch_to_gpu"><code class="name flex">
-<span>def <span class="ident">switch_to_gpu</span></span>(<span>self)</span>
+<dt id="flares.active_region.ActiveRegion.show_penumbra"><code class="name flex">
+<span>def <span class="ident">show_penumbra</span></span>(<span>self, axs_orig, axs_seg)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Shows the penumbra segmented next to the continuum</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>axs_orig</code></strong> :&ensp;<code>matplotlib axis</code></dt>
+<dd>The axis for the unsegmented image</dd>
+<dt><strong><code>axs_seg</code></strong> :&ensp;<code>matplotlib axis</code></dt>
+<dd>The axis for the segmented image</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def switch_to_gpu(self):
-    self.Bz = torch.from_numpy(self.Bz).to(dev)
-    self.Bx = torch.from_numpy(self.Bx).to(dev)
-    self.By = torch.from_numpy(self.By).to(dev)
-    self.cont = torch.from_numpy(self.cont).to(dev)</code></pre>
+<pre><code class="python">def show_penumbra(self, axs_orig, axs_seg):
+    &#34;&#34;&#34;Shows the penumbra segmented next to the continuum
+
+    Args:
+        axs_orig (matplotlib axis): The axis for the unsegmented image
+        axs_seg (matplotlib axis): The axis for the segmented image
+    &#34;&#34;&#34;
+    self.assert_masks()
+    axs_orig.imshow(self.cont, cmap = &#34;gray&#34;)
+    axs_seg.imshow(~self.__pumbra, cmap = &#34;gray&#34;)
+    axs_orig.axis(False)
+    axs_seg.axis(False)</code></pre>
 </details>
 </dd>
-<dt id="flares.active_region.ActiveRegion.totrho"><code class="name flex">
-<span>def <span class="ident">totrho</span></span>(<span>self, mask)</span>
+<dt id="flares.active_region.ActiveRegion.show_umbra"><code class="name flex">
+<span>def <span class="ident">show_umbra</span></span>(<span>self, axs_orig, axs_seg)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Shows the umbra segmented next to the continuum</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>axs_orig</code></strong> :&ensp;<code>matplotlib axis</code></dt>
+<dd>The axis for the unsegmented image</dd>
+<dt><strong><code>axs_seg</code></strong> :&ensp;<code>matplotlib axis</code></dt>
+<dd>The axis for the segmented image</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def totrho(self, mask):
-    self.assert_rho()
-    return torch.sum(self.rho[mask])</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.twist_moments"><code class="name flex">
-<span>def <span class="ident">twist_moments</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def twist_moments(self, mask):
-    self.assert_J()
-    return self.moment(self.J[mask] / self.Bz[mask])</code></pre>
-</details>
-</dd>
-<dt id="flares.active_region.ActiveRegion.z_moments"><code class="name flex">
-<span>def <span class="ident">z_moments</span></span>(<span>self, mask)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def z_moments(self, mask):
-    return self.moment(self.Bz[mask])</code></pre>
+<pre><code class="python">def show_umbra(self, axs_orig, axs_seg):
+    &#34;&#34;&#34;Shows the umbra segmented next to the continuum
+
+    Args:
+        axs_orig (matplotlib axis): The axis for the unsegmented image
+        axs_seg (matplotlib axis): The axis for the segmented image
+    &#34;&#34;&#34;
+    self.assert_masks()
+    axs_orig.imshow(self.cont, cmap = &#34;gray&#34;)
+    axs_seg.imshow(~self.__umbra, cmap = &#34;gray&#34;)
+    axs_orig.axis(False)
+    axs_seg.axis(False)</code></pre>
 </details>
 </dd>
 </dl>
+<h3>Inherited members</h3>
+<ul class="hlist">
+<li><code><b><a title="flares.fields.ActiveRegionParameters" href="fields.html#flares.fields.ActiveRegionParameters">ActiveRegionParameters</a></b></code>:
+<ul class="hlist">
+<li><code><a title="flares.fields.ActiveRegionParameters.B_grad_moments" href="fields.html#flares.fields.ActiveRegionParameters.B_grad_moments">B_grad_moments</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.Bh_grad_moments" href="fields.html#flares.fields.ActiveRegionParameters.Bh_grad_moments">Bh_grad_moments</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.Bz_grad_moments" href="fields.html#flares.fields.ActiveRegionParameters.Bz_grad_moments">Bz_grad_moments</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.J_moments" href="fields.html#flares.fields.ActiveRegionParameters.J_moments">J_moments</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.Jh_moments" href="fields.html#flares.fields.ActiveRegionParameters.Jh_moments">Jh_moments</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.assert_B" href="fields.html#flares.fields.ActiveRegionFields.assert_B">assert_B</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.assert_Bh" href="fields.html#flares.fields.ActiveRegionFields.assert_Bh">assert_Bh</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.assert_Bp" href="fields.html#flares.fields.ActiveRegionFields.assert_Bp">assert_Bp</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.assert_J" href="fields.html#flares.fields.ActiveRegionFields.assert_J">assert_J</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.assert_Jh" href="fields.html#flares.fields.ActiveRegionFields.assert_Jh">assert_Jh</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.assert_gamma" href="fields.html#flares.fields.ActiveRegionFields.assert_gamma">assert_gamma</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.assert_grad_B" href="fields.html#flares.fields.ActiveRegionFields.assert_grad_B">assert_grad_B</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.assert_grad_Bh" href="fields.html#flares.fields.ActiveRegionFields.assert_grad_Bh">assert_grad_Bh</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.assert_grad_Bm" href="fields.html#flares.fields.ActiveRegionFields.assert_grad_Bm">assert_grad_Bm</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.assert_grad_Bx" href="fields.html#flares.fields.ActiveRegionFields.assert_grad_Bx">assert_grad_Bx</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.assert_grad_By" href="fields.html#flares.fields.ActiveRegionFields.assert_grad_By">assert_grad_By</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.assert_grad_Bz" href="fields.html#flares.fields.ActiveRegionFields.assert_grad_Bz">assert_grad_Bz</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.assert_hc" href="fields.html#flares.fields.ActiveRegionFields.assert_hc">assert_hc</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.assert_rho" href="fields.html#flares.fields.ActiveRegionFields.assert_rho">assert_rho</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.assert_shear" href="fields.html#flares.fields.ActiveRegionFields.assert_shear">assert_shear</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.entropy" href="fields.html#flares.fields.ActiveRegionParameters.entropy">entropy</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.fractal_dim" href="fields.html#flares.fields.ActiveRegionParameters.fractal_dim">fractal_dim</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.gamma_moments" href="fields.html#flares.fields.ActiveRegionParameters.gamma_moments">gamma_moments</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.h_moments" href="fields.html#flares.fields.ActiveRegionParameters.h_moments">h_moments</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.hc_moments" href="fields.html#flares.fields.ActiveRegionParameters.hc_moments">hc_moments</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.hctot" href="fields.html#flares.fields.ActiveRegionParameters.hctot">hctot</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.hctotabs" href="fields.html#flares.fields.ActiveRegionParameters.hctotabs">hctotabs</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.ihtot" href="fields.html#flares.fields.ActiveRegionParameters.ihtot">ihtot</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.ihtotabs" href="fields.html#flares.fields.ActiveRegionParameters.ihtotabs">ihtotabs</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.itot" href="fields.html#flares.fields.ActiveRegionParameters.itot">itot</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.itot_polarity" href="fields.html#flares.fields.ActiveRegionParameters.itot_polarity">itot_polarity</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.itotabs" href="fields.html#flares.fields.ActiveRegionParameters.itotabs">itotabs</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.manually_add_field" href="fields.html#flares.fields.ActiveRegionFields.manually_add_field">manually_add_field</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.norm" href="fields.html#flares.fields.ActiveRegionParameters.norm">norm</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.phitot" href="fields.html#flares.fields.ActiveRegionParameters.phitot">phitot</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.phitotabs" href="fields.html#flares.fields.ActiveRegionParameters.phitotabs">phitotabs</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.physical_features" href="fields.html#flares.fields.ActiveRegionParameters.physical_features">physical_features</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.rho_moments" href="fields.html#flares.fields.ActiveRegionParameters.rho_moments">rho_moments</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.shear_moments" href="fields.html#flares.fields.ActiveRegionParameters.shear_moments">shear_moments</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.totrho" href="fields.html#flares.fields.ActiveRegionParameters.totrho">totrho</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.twist_moments" href="fields.html#flares.fields.ActiveRegionParameters.twist_moments">twist_moments</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.z_moments" href="fields.html#flares.fields.ActiveRegionParameters.z_moments">z_moments</a></code></li>
+</ul>
+</li>
+</ul>
 </dd>
 </dl>
 </section>
@@ -2028,58 +1725,19 @@ of nans</p>
 <li>
 <h4><code><a title="flares.active_region.ActiveRegion" href="#flares.active_region.ActiveRegion">ActiveRegion</a></code></h4>
 <ul class="">
-<li><code><a title="flares.active_region.ActiveRegion.B_grad_moments" href="#flares.active_region.ActiveRegion.B_grad_moments">B_grad_moments</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.Bh_grad_moments" href="#flares.active_region.ActiveRegion.Bh_grad_moments">Bh_grad_moments</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.Bz_grad_moments" href="#flares.active_region.ActiveRegion.Bz_grad_moments">Bz_grad_moments</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.J_moments" href="#flares.active_region.ActiveRegion.J_moments">J_moments</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.Jh_moments" href="#flares.active_region.ActiveRegion.Jh_moments">Jh_moments</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.assert_B" href="#flares.active_region.ActiveRegion.assert_B">assert_B</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.assert_Bh" href="#flares.active_region.ActiveRegion.assert_Bh">assert_Bh</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.assert_Bp" href="#flares.active_region.ActiveRegion.assert_Bp">assert_Bp</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.assert_J" href="#flares.active_region.ActiveRegion.assert_J">assert_J</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.assert_Jh" href="#flares.active_region.ActiveRegion.assert_Jh">assert_Jh</a></code></li>
 <li><code><a title="flares.active_region.ActiveRegion.assert_background" href="#flares.active_region.ActiveRegion.assert_background">assert_background</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.assert_gamma" href="#flares.active_region.ActiveRegion.assert_gamma">assert_gamma</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.assert_grad_B" href="#flares.active_region.ActiveRegion.assert_grad_B">assert_grad_B</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.assert_grad_Bh" href="#flares.active_region.ActiveRegion.assert_grad_Bh">assert_grad_Bh</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.assert_grad_Bm" href="#flares.active_region.ActiveRegion.assert_grad_Bm">assert_grad_Bm</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.assert_grad_Bx" href="#flares.active_region.ActiveRegion.assert_grad_Bx">assert_grad_Bx</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.assert_grad_By" href="#flares.active_region.ActiveRegion.assert_grad_By">assert_grad_By</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.assert_grad_Bz" href="#flares.active_region.ActiveRegion.assert_grad_Bz">assert_grad_Bz</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.assert_hc" href="#flares.active_region.ActiveRegion.assert_hc">assert_hc</a></code></li>
 <li><code><a title="flares.active_region.ActiveRegion.assert_masks" href="#flares.active_region.ActiveRegion.assert_masks">assert_masks</a></code></li>
 <li><code><a title="flares.active_region.ActiveRegion.assert_neutral_lines" href="#flares.active_region.ActiveRegion.assert_neutral_lines">assert_neutral_lines</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.assert_rho" href="#flares.active_region.ActiveRegion.assert_rho">assert_rho</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.assert_shear" href="#flares.active_region.ActiveRegion.assert_shear">assert_shear</a></code></li>
 <li><code><a title="flares.active_region.ActiveRegion.assert_umbra_pumbra" href="#flares.active_region.ActiveRegion.assert_umbra_pumbra">assert_umbra_pumbra</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.come_back_from_gpu" href="#flares.active_region.ActiveRegion.come_back_from_gpu">come_back_from_gpu</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.connect_edges" href="#flares.active_region.ActiveRegion.connect_edges">connect_edges</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.gamma_moments" href="#flares.active_region.ActiveRegion.gamma_moments">gamma_moments</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.group_pixels" href="#flares.active_region.ActiveRegion.group_pixels">group_pixels</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.h_moments" href="#flares.active_region.ActiveRegion.h_moments">h_moments</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.hc_moments" href="#flares.active_region.ActiveRegion.hc_moments">hc_moments</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.hctot" href="#flares.active_region.ActiveRegion.hctot">hctot</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.hctotabs" href="#flares.active_region.ActiveRegion.hctotabs">hctotabs</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.ihtot" href="#flares.active_region.ActiveRegion.ihtot">ihtot</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.ihtotabs" href="#flares.active_region.ActiveRegion.ihtotabs">ihtotabs</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.itot" href="#flares.active_region.ActiveRegion.itot">itot</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.itot_polarity" href="#flares.active_region.ActiveRegion.itot_polarity">itot_polarity</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.itotabs" href="#flares.active_region.ActiveRegion.itotabs">itotabs</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.largest_n_clusters" href="#flares.active_region.ActiveRegion.largest_n_clusters">largest_n_clusters</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.moment" href="#flares.active_region.ActiveRegion.moment">moment</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.norm" href="#flares.active_region.ActiveRegion.norm">norm</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.phitot" href="#flares.active_region.ActiveRegion.phitot">phitot</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.phitotabs" href="#flares.active_region.ActiveRegion.phitotabs">phitotabs</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.physical_features" href="#flares.active_region.ActiveRegion.physical_features">physical_features</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.remove_bordering_pixels" href="#flares.active_region.ActiveRegion.remove_bordering_pixels">remove_bordering_pixels</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.remove_percentage_max" href="#flares.active_region.ActiveRegion.remove_percentage_max">remove_percentage_max</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.remove_small_groups" href="#flares.active_region.ActiveRegion.remove_small_groups">remove_small_groups</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.rho_moments" href="#flares.active_region.ActiveRegion.rho_moments">rho_moments</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.shear_moments" href="#flares.active_region.ActiveRegion.shear_moments">shear_moments</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.switch_to_gpu" href="#flares.active_region.ActiveRegion.switch_to_gpu">switch_to_gpu</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.totrho" href="#flares.active_region.ActiveRegion.totrho">totrho</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.twist_moments" href="#flares.active_region.ActiveRegion.twist_moments">twist_moments</a></code></li>
-<li><code><a title="flares.active_region.ActiveRegion.z_moments" href="#flares.active_region.ActiveRegion.z_moments">z_moments</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.get_baseline" href="#flares.active_region.ActiveRegion.get_baseline">get_baseline</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.get_graph" href="#flares.active_region.ActiveRegion.get_graph">get_graph</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.get_segmented" href="#flares.active_region.ActiveRegion.get_segmented">get_segmented</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.get_sharps" href="#flares.active_region.ActiveRegion.get_sharps">get_sharps</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.show_background" href="#flares.active_region.ActiveRegion.show_background">show_background</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.show_graph" href="#flares.active_region.ActiveRegion.show_graph">show_graph</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.show_neutral_line" href="#flares.active_region.ActiveRegion.show_neutral_line">show_neutral_line</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.show_penumbra" href="#flares.active_region.ActiveRegion.show_penumbra">show_penumbra</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.show_umbra" href="#flares.active_region.ActiveRegion.show_umbra">show_umbra</a></code></li>
 </ul>
 </li>
 </ul>

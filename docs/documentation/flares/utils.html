@@ -29,19 +29,70 @@
 </summary>
 <pre><code class="python">import torch
 import numpy as np
+import skimage
 
 
-###### CONSTANTS
-dev = torch.device(&#34;cpu&#34;)
-
-###### UTILITIES
 def norm(data):
+    &#34;&#34;&#34;The one norm of a set of data elements
+
+    Args:
+        data (A list, tuple or iterable): A List of elements that can be taken the absolute value of
+
+    Returns:
+        The result of summing the application of torch.abs() on all elements of data
+    &#34;&#34;&#34;
     n = 0
     for i in data:
         n += np.abs(i)
     return n
 
+###### CONSTANTS
+dev = torch.device(&#34;cpu&#34;) 
 
+def stat_moment_label(prefix: str):
+    &#34;&#34;&#34;Labels the statistical moment with an added prefix
+
+    Args:
+        prefix (string): Prefix to add to labels
+
+    Returns:
+        tuple: List of labeled elements
+    &#34;&#34;&#34;
+    return prefix + &#34;_mean&#34;, prefix + &#34;_std&#34;, prefix + &#34;_skew&#34;, prefix + &#34;_kurt&#34;
+
+def stat_moment(data):
+    &#34;&#34;&#34;The statistical \&#34;moment\&#34; of a distribution
+
+    Args:
+        data (np.array): A (usually 2d) array containing a distribution of scalars
+
+        For a dataset X, 
+
+        The mean measures the &#34;center point&#34; of the data X
+        $$mean(X) = \\frac{1}{|X|}\\sum_{x \\in X}x$$
+
+        The standard deviation measures the &#34;spread&#34; of the data X
+        $$std(X) = \\sqrt{\\frac{1}{|X|}\\sum_{x \\in X}(x - mean(x))^2}$$
+
+        The skew measures the &#34;shift&#34; of the center point of X
+        $$skew(X) = \\frac{1}{|X|}\\sum_{x \\in X}(\\frac{x - mean(x)}{std(x)})^3$$
+
+        The kurtosis measures the &#34;taildness&#34; of a X
+        $$kurtosis(X) = \\frac{1}{|X|}\\sum_{x \\in X}(\\frac{x - mean(x)}{std(x)})^4 - 3$$
+
+        $$M(X) = (mean(X), std(X), skew(X), kurtosis(X))^T$$
+
+    Returns:
+        A pytorch tensor containing average, standard deviation, skew, kurtosis (in that order)
+    &#34;&#34;&#34;
+    avg = torch.mean(data)
+    std = torch.sqrt(torch.mean((data - avg)**2))
+    skw = torch.mean(((data - avg)/std)**3)
+    krt = torch.mean(((data - avg)/std)**4) - 3.0
+    return torch.tensor([avg, std, skw, krt])
+
+
+# The kernel to use greens function (radius 10)
 radius = 10
 dz = 0.0001
 dist_kern = torch.zeros((2*radius + 1, 2*radius + 1))
@@ -56,6 +107,14 @@ for x0 in range(radius + 1):
 
 
 def gradient(data):
+    &#34;&#34;&#34;Numerical Gradient of data (my own - not numpy&#39;s)
+
+    Args:
+        data (2d np.array): A 2d array of scalars
+
+    Returns:
+        (np.array, np.array): 2 arrays representing dy, dx respectively
+    &#34;&#34;&#34;
     retrows = torch.zeros(data.shape, device = dev)
     retcols = torch.zeros(data.shape, device = dev)
 
@@ -71,6 +130,14 @@ def gradient(data):
     return 0.5 * retrows, 0.5 * retcols
 
 def cov(m, rowvar=False):
+    &#34;&#34;&#34;Covariance of a dataset m
+
+    Args:
+        m (2d array): Two lists of data (x, y) to take the covariance from
+
+    Returns:
+        Covariance of the two data sets
+    &#34;&#34;&#34;
     if m.dim() &gt; 2:
         raise ValueError(&#39;m has more than 2 dimensions&#39;)
     if m.dim() &lt; 2:
@@ -83,12 +150,43 @@ def cov(m, rowvar=False):
     mt = m.t()  # if complex: mt = m.t().conj()
     return fact * m.matmul(mt).squeeze()
 
-def fractal_dimension(Z, threshold = 0.9):
-    # Only for 2d image
-    assert(len(Z.shape) == 2)
+def unpad(Z):
+    &#34;&#34;&#34;Removes surrounding whitespace (False values) from a binary array Z
+
+    Args:
+        Z (2d array): A binary array
+
+    Returns:
+        Same type as Z: Z without the surrounding values False
+    &#34;&#34;&#34;
+    x, y = np.where(Z)
+    return Z[np.min(x):np.max(x)+1,np.min(y):np.max(y)+1]
+
+
+def fractal_dimension(Z_):
+    Z = unpad(Z_)
+
+    &#34;&#34;&#34;Gets the fractal dimension of a 2d binary array
+
+    Args:
+        Z (np.array): a binary array
+
+    Returns:
+        float: fractal dimension
+    &#34;&#34;&#34;
 
     # From https://github.com/rougier/numpy-100 (#87)
-    def boxcount(Z, k):
+    def __boxcount(Z, k):
+        &#34;&#34;&#34;Counts the number of active boxes for each k x k box - 
+        reducing the array to a rows // k, col // k array
+
+        Args:
+            Z (np.array): The array
+            k (int): The size of the box
+
+        Returns:
+            int: The number of nonzero boxes 
+        &#34;&#34;&#34;
         S = np.add.reduceat(
             np.add.reduceat(Z, np.arange(0, Z.shape[0], k), axis=0),
                                np.arange(0, Z.shape[1], k), axis=1)
@@ -97,16 +195,11 @@ def fractal_dimension(Z, threshold = 0.9):
         return len(np.where((S &gt; 0) &amp; (S &lt; k*k))[0])
 
 
-    # Transform Z into a binary array
-    Z = (Z &lt; threshold)
-
     # Minimal dimension of image
     p = min(Z.shape)
 
     # Greatest power of 2 less than or equal to p
     n = 2**np.floor(np.log(p)/np.log(2))
-
-    # Extract the exponent
     n = int(np.log(n)/np.log(2))
 
     # Build successive box sizes (from 2**n down to 2**1)
@@ -115,11 +208,25 @@ def fractal_dimension(Z, threshold = 0.9):
     # Actual box counting with decreasing size
     counts = []
     for size in sizes:
-        counts.append(boxcount(Z, size))
+        counts.append(__boxcount(Z, size))
+    counts = np.array(counts, dtype = float)
+    counts[counts == 0] = 0.01
+    sizes[sizes == 0] = 0.01
 
     # Fit the successive log(sizes) with log (counts)
     coeffs = np.polyfit(np.log(sizes), np.log(counts), 1)
-    return -coeffs[0]</code></pre>
+    return -coeffs[0]
+
+def shannon_entropy(Z):
+    &#34;&#34;&#34;Computes shannon entropy of a binary array Z
+
+    Args:
+        Z (2d array): A binary array
+
+    Returns:
+        float: The shannon entropy of array Z
+    &#34;&#34;&#34;
+    return skimage.measure.shannon_entropy(unpad(Z))</code></pre>
 </details>
 </section>
 <section>
@@ -133,12 +240,27 @@ def fractal_dimension(Z, threshold = 0.9):
 <span>def <span class="ident">cov</span></span>(<span>m, rowvar=False)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Covariance of a dataset m</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>m</code></strong> :&ensp;<code>2d array</code></dt>
+<dd>Two lists of data (x, y) to take the covariance from</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Covariance of the two data sets</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def cov(m, rowvar=False):
+    &#34;&#34;&#34;Covariance of a dataset m
+
+    Args:
+        m (2d array): Two lists of data (x, y) to take the covariance from
+
+    Returns:
+        Covariance of the two data sets
+    &#34;&#34;&#34;
     if m.dim() &gt; 2:
         raise ValueError(&#39;m has more than 2 dimensions&#39;)
     if m.dim() &lt; 2:
@@ -153,7 +275,7 @@ def fractal_dimension(Z, threshold = 0.9):
 </details>
 </dd>
 <dt id="flares.utils.fractal_dimension"><code class="name flex">
-<span>def <span class="ident">fractal_dimension</span></span>(<span>Z, threshold=0.9)</span>
+<span>def <span class="ident">fractal_dimension</span></span>(<span>Z_)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -161,12 +283,30 @@ def fractal_dimension(Z, threshold = 0.9):
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def fractal_dimension(Z, threshold = 0.9):
-    # Only for 2d image
-    assert(len(Z.shape) == 2)
+<pre><code class="python">def fractal_dimension(Z_):
+    Z = unpad(Z_)
+
+    &#34;&#34;&#34;Gets the fractal dimension of a 2d binary array
+
+    Args:
+        Z (np.array): a binary array
+
+    Returns:
+        float: fractal dimension
+    &#34;&#34;&#34;
 
     # From https://github.com/rougier/numpy-100 (#87)
-    def boxcount(Z, k):
+    def __boxcount(Z, k):
+        &#34;&#34;&#34;Counts the number of active boxes for each k x k box - 
+        reducing the array to a rows // k, col // k array
+
+        Args:
+            Z (np.array): The array
+            k (int): The size of the box
+
+        Returns:
+            int: The number of nonzero boxes 
+        &#34;&#34;&#34;
         S = np.add.reduceat(
             np.add.reduceat(Z, np.arange(0, Z.shape[0], k), axis=0),
                                np.arange(0, Z.shape[1], k), axis=1)
@@ -175,16 +315,11 @@ def fractal_dimension(Z, threshold = 0.9):
         return len(np.where((S &gt; 0) &amp; (S &lt; k*k))[0])
 
 
-    # Transform Z into a binary array
-    Z = (Z &lt; threshold)
-
     # Minimal dimension of image
     p = min(Z.shape)
 
     # Greatest power of 2 less than or equal to p
     n = 2**np.floor(np.log(p)/np.log(2))
-
-    # Extract the exponent
     n = int(np.log(n)/np.log(2))
 
     # Build successive box sizes (from 2**n down to 2**1)
@@ -193,7 +328,10 @@ def fractal_dimension(Z, threshold = 0.9):
     # Actual box counting with decreasing size
     counts = []
     for size in sizes:
-        counts.append(boxcount(Z, size))
+        counts.append(__boxcount(Z, size))
+    counts = np.array(counts, dtype = float)
+    counts[counts == 0] = 0.01
+    sizes[sizes == 0] = 0.01
 
     # Fit the successive log(sizes) with log (counts)
     coeffs = np.polyfit(np.log(sizes), np.log(counts), 1)
@@ -204,12 +342,27 @@ def fractal_dimension(Z, threshold = 0.9):
 <span>def <span class="ident">gradient</span></span>(<span>data)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Numerical Gradient of data (my own - not numpy's)</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>data</code></strong> :&ensp;<code>2d np.array</code></dt>
+<dd>A 2d array of scalars</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>(np.array, np.array): 2 arrays representing dy, dx respectively</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def gradient(data):
+    &#34;&#34;&#34;Numerical Gradient of data (my own - not numpy&#39;s)
+
+    Args:
+        data (2d np.array): A 2d array of scalars
+
+    Returns:
+        (np.array, np.array): 2 arrays representing dy, dx respectively
+    &#34;&#34;&#34;
     retrows = torch.zeros(data.shape, device = dev)
     retcols = torch.zeros(data.shape, device = dev)
 
@@ -229,16 +382,183 @@ def fractal_dimension(Z, threshold = 0.9):
 <span>def <span class="ident">norm</span></span>(<span>data)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>The one norm of a set of data elements</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>data</code></strong> :&ensp;<code>A list, tuple</code> or <code>iterable</code></dt>
+<dd>A List of elements that can be taken the absolute value of</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>The result of summing the application of torch.abs() on all elements of data</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def norm(data):
+    &#34;&#34;&#34;The one norm of a set of data elements
+
+    Args:
+        data (A list, tuple or iterable): A List of elements that can be taken the absolute value of
+
+    Returns:
+        The result of summing the application of torch.abs() on all elements of data
+    &#34;&#34;&#34;
     n = 0
     for i in data:
         n += np.abs(i)
     return n</code></pre>
+</details>
+</dd>
+<dt id="flares.utils.shannon_entropy"><code class="name flex">
+<span>def <span class="ident">shannon_entropy</span></span>(<span>Z)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Computes shannon entropy of a binary array Z</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>Z</code></strong> :&ensp;<code>2d array</code></dt>
+<dd>A binary array</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>float</code></dt>
+<dd>The shannon entropy of array Z</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def shannon_entropy(Z):
+    &#34;&#34;&#34;Computes shannon entropy of a binary array Z
+
+    Args:
+        Z (2d array): A binary array
+
+    Returns:
+        float: The shannon entropy of array Z
+    &#34;&#34;&#34;
+    return skimage.measure.shannon_entropy(unpad(Z))</code></pre>
+</details>
+</dd>
+<dt id="flares.utils.stat_moment"><code class="name flex">
+<span>def <span class="ident">stat_moment</span></span>(<span>data)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>The statistical "moment" of a distribution</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>data</code></strong> :&ensp;<code>np.array</code></dt>
+<dd>A (usually 2d) array containing a distribution of scalars</dd>
+</dl>
+<p>For a dataset X, </p>
+<p>The mean measures the "center point" of the data X
+<span><span class="MathJax_Preview">mean(X) = \frac{1}{|X|}\sum_{x \in X}x</span><script type="math/tex; mode=display">mean(X) = \frac{1}{|X|}\sum_{x \in X}x</script></span></p>
+<p>The standard deviation measures the "spread" of the data X
+<span><span class="MathJax_Preview">std(X) = \sqrt{\frac{1}{|X|}\sum_{x \in X}(x - mean(x))^2}</span><script type="math/tex; mode=display">std(X) = \sqrt{\frac{1}{|X|}\sum_{x \in X}(x - mean(x))^2}</script></span></p>
+<p>The skew measures the "shift" of the center point of X
+<span><span class="MathJax_Preview">skew(X) = \frac{1}{|X|}\sum_{x \in X}(\frac{x - mean(x)}{std(x)})^3</span><script type="math/tex; mode=display">skew(X) = \frac{1}{|X|}\sum_{x \in X}(\frac{x - mean(x)}{std(x)})^3</script></span></p>
+<p>The kurtosis measures the "taildness" of a X
+<span><span class="MathJax_Preview">kurtosis(X) = \frac{1}{|X|}\sum_{x \in X}(\frac{x - mean(x)}{std(x)})^4 - 3</span><script type="math/tex; mode=display">kurtosis(X) = \frac{1}{|X|}\sum_{x \in X}(\frac{x - mean(x)}{std(x)})^4 - 3</script></span></p>
+<p><span><span class="MathJax_Preview">M(X) = (mean(X), std(X), skew(X), kurtosis(X))^T</span><script type="math/tex; mode=display">M(X) = (mean(X), std(X), skew(X), kurtosis(X))^T</script></span></p>
+<h2 id="returns">Returns</h2>
+<p>A pytorch tensor containing average, standard deviation, skew, kurtosis (in that order)</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def stat_moment(data):
+    &#34;&#34;&#34;The statistical \&#34;moment\&#34; of a distribution
+
+    Args:
+        data (np.array): A (usually 2d) array containing a distribution of scalars
+
+        For a dataset X, 
+
+        The mean measures the &#34;center point&#34; of the data X
+        $$mean(X) = \\frac{1}{|X|}\\sum_{x \\in X}x$$
+
+        The standard deviation measures the &#34;spread&#34; of the data X
+        $$std(X) = \\sqrt{\\frac{1}{|X|}\\sum_{x \\in X}(x - mean(x))^2}$$
+
+        The skew measures the &#34;shift&#34; of the center point of X
+        $$skew(X) = \\frac{1}{|X|}\\sum_{x \\in X}(\\frac{x - mean(x)}{std(x)})^3$$
+
+        The kurtosis measures the &#34;taildness&#34; of a X
+        $$kurtosis(X) = \\frac{1}{|X|}\\sum_{x \\in X}(\\frac{x - mean(x)}{std(x)})^4 - 3$$
+
+        $$M(X) = (mean(X), std(X), skew(X), kurtosis(X))^T$$
+
+    Returns:
+        A pytorch tensor containing average, standard deviation, skew, kurtosis (in that order)
+    &#34;&#34;&#34;
+    avg = torch.mean(data)
+    std = torch.sqrt(torch.mean((data - avg)**2))
+    skw = torch.mean(((data - avg)/std)**3)
+    krt = torch.mean(((data - avg)/std)**4) - 3.0
+    return torch.tensor([avg, std, skw, krt])</code></pre>
+</details>
+</dd>
+<dt id="flares.utils.stat_moment_label"><code class="name flex">
+<span>def <span class="ident">stat_moment_label</span></span>(<span>prefix: str)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Labels the statistical moment with an added prefix</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>prefix</code></strong> :&ensp;<code>string</code></dt>
+<dd>Prefix to add to labels</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>tuple</code></dt>
+<dd>List of labeled elements</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def stat_moment_label(prefix: str):
+    &#34;&#34;&#34;Labels the statistical moment with an added prefix
+
+    Args:
+        prefix (string): Prefix to add to labels
+
+    Returns:
+        tuple: List of labeled elements
+    &#34;&#34;&#34;
+    return prefix + &#34;_mean&#34;, prefix + &#34;_std&#34;, prefix + &#34;_skew&#34;, prefix + &#34;_kurt&#34;</code></pre>
+</details>
+</dd>
+<dt id="flares.utils.unpad"><code class="name flex">
+<span>def <span class="ident">unpad</span></span>(<span>Z)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Removes surrounding whitespace (False values) from a binary array Z</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>Z</code></strong> :&ensp;<code>2d array</code></dt>
+<dd>A binary array</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Same type as Z</code></dt>
+<dd>Z without the surrounding values False</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def unpad(Z):
+    &#34;&#34;&#34;Removes surrounding whitespace (False values) from a binary array Z
+
+    Args:
+        Z (2d array): A binary array
+
+    Returns:
+        Same type as Z: Z without the surrounding values False
+    &#34;&#34;&#34;
+    x, y = np.where(Z)
+    return Z[np.min(x):np.max(x)+1,np.min(y):np.max(y)+1]</code></pre>
 </details>
 </dd>
 </dl>
@@ -258,11 +578,15 @@ def fractal_dimension(Z, threshold = 0.9):
 </ul>
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
-<ul class="">
+<ul class="two-column">
 <li><code><a title="flares.utils.cov" href="#flares.utils.cov">cov</a></code></li>
 <li><code><a title="flares.utils.fractal_dimension" href="#flares.utils.fractal_dimension">fractal_dimension</a></code></li>
 <li><code><a title="flares.utils.gradient" href="#flares.utils.gradient">gradient</a></code></li>
 <li><code><a title="flares.utils.norm" href="#flares.utils.norm">norm</a></code></li>
+<li><code><a title="flares.utils.shannon_entropy" href="#flares.utils.shannon_entropy">shannon_entropy</a></code></li>
+<li><code><a title="flares.utils.stat_moment" href="#flares.utils.stat_moment">stat_moment</a></code></li>
+<li><code><a title="flares.utils.stat_moment_label" href="#flares.utils.stat_moment_label">stat_moment_label</a></code></li>
+<li><code><a title="flares.utils.unpad" href="#flares.utils.unpad">unpad</a></code></li>
 </ul>
 </li>
 </ul>
