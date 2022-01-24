@@ -53,7 +53,7 @@ import matplotlib.pyplot as plt
 
 
 class ActiveRegion(ActiveRegionParameters):
-    def __init__(self, hnum: int, date: datetime, root: str):
+    def __init__(self, hnum: int, date: datetime, root: str, num_features = 0):
         &#34;&#34;&#34;An Active Region is an entry point into 
         parameterization, segmentation, and graph methods. 
 
@@ -122,7 +122,7 @@ class ActiveRegion(ActiveRegionParameters):
         self.By[np.abs(self.By) &lt; minimum_val] = minimum_val
 
         # Now Bx By Bz are defined so generate the parameter class
-        super().__init__(self.Bz, self.By, self.Bx)
+        super().__init__(self.Bz, self.By, self.Bx, num_features)
 
         # The four &#34;segments&#34; as raw arrays (no nodes for graph)
         self.__background = None
@@ -131,15 +131,15 @@ class ActiveRegion(ActiveRegionParameters):
         self.__nl = None
 
         # The Three data sets
-        self.__sharps, self.__sharps_labels = data[&#34;sharps&#34;].values(), data[&#34;sharps&#34;].keys()
-        self.__baseline, self.__baseline_labels = self.physical_features(np.ones(self.shape, dtype = bool), &#34;bas_&#34;)
+        self.__sharps, self.__sharps_labels = np.array(data[&#34;sharps&#34;].values()), list(data[&#34;sharps&#34;].keys())
+        self.__baseline, self.__baseline_labels = None, None
         self.__segmented, self.__segmented_labels = np.zeros(4 *  self.num_features), [&#34;&#34; for _ in range(4 * self.num_features)]
         self.__G = nx.Graph()
 
         # GRAPH DATA
         # Graph data is split between masks and feature vectors. Each &#34;mask&#34; is a node that gets its physical features computed on
         self.__node_masks = np.zeros((0, self.shape[0], self.shape[1]), dtype = bool)
-        self.__G_labels = self.__baseline_labels # Just a copy of baseline
+        
 
     def show_graph(self, axs_cont, axs_seg):
         &#34;&#34;&#34;Plots the continuum next to segmented graph with nodes
@@ -160,9 +160,22 @@ class ActiveRegion(ActiveRegionParameters):
         pos = nx.get_node_attributes(self.__G, &#34;pos&#34;)
 
         axs_cont.imshow(self.cont)
-        nx.draw(self.__G, pos, axs_cont, node_size = 10, cmap = plt.get_cmap(&#39;viridis&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)
+        nx.draw(self.__G, pos, axs_cont, node_size = 100, cmap = plt.get_cmap(&#39;gray&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)
         axs_seg.imshow(self.__umbra | self.__pumbra | self.__nl, cmap = &#34;gray&#34;)
-        nx.draw(self.__G, pos, axs_seg, node_size = 10, cmap = plt.get_cmap(&#39;viridis&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)
+        nx.draw(self.__G, pos, axs_seg, node_size = 100, cmap = plt.get_cmap(&#39;viridis&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)
+
+    def draw_graph(self, axs):
+        &#34;&#34;&#34;Draws just the graph without a background image of the continuum
+
+        Args:
+            axs (pyplot.axis): The axis to write the graph to
+        &#34;&#34;&#34;
+        self.assert_masks()
+
+        color_keys = {&#34;penumbra&#34; : 1.0, &#34;umbra&#34; : 0.5714285714285714, &#34;nl&#34; : 0.0}
+        values = [color_keys.get(x[1][&#34;type&#34;], 0.25) for x in self.__G.nodes.data()]
+        nx.draw(self.__G, ax = axs, node_size = 100, cmap = plt.get_cmap(&#39;viridis&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)
+
 
     def show_umbra(self, axs_orig, axs_seg):
         &#34;&#34;&#34;Shows the umbra segmented next to the continuum
@@ -225,6 +238,7 @@ class ActiveRegion(ActiveRegionParameters):
             data, labels
         &#34;&#34;&#34;
         self.assert_masks()
+        self.__G_labels = self.__baseline_labels # Just a copy of baseline
         return self.__G, self.__G_labels
 
     def get_sharps(self):
@@ -235,6 +249,7 @@ class ActiveRegion(ActiveRegionParameters):
         Returns:
             data, labels
         &#34;&#34;&#34;
+        self.assert_masks()
         return self.__sharps, self.__sharps_labels
 
     def get_baseline(self):
@@ -243,6 +258,7 @@ class ActiveRegion(ActiveRegionParameters):
         Returns:
             numpy array: baseline data set
         &#34;&#34;&#34;
+        self.assert_masks()
         return self.__baseline, self.__baseline_labels
 
     def get_segmented(self):
@@ -258,6 +274,7 @@ class ActiveRegion(ActiveRegionParameters):
         &#34;&#34;&#34;One function that generates all three masks. If all three masks are already
         generated, this function does nothing
         &#34;&#34;&#34;
+        self.__baseline, self.__baseline_labels = self.physical_features(np.ones(self.shape, dtype = bool), &#34;bas_&#34;)
         self.assert_neutral_lines()
         self.assert_umbra_pumbra()
         self.assert_background()
@@ -276,8 +293,8 @@ class ActiveRegion(ActiveRegionParameters):
 
             # Update dataset
             data, labels = self.physical_features(background, &#34;bckg_&#34;)
-            self.__segmented[2*self.num_features:3*self.num_features] = data
-            self.__segmented_labels[2*self.num_features:3*self.num_features] = labels
+            self.__segmented[3*self.num_features:4*self.num_features] = data
+            self.__segmented_labels[3*self.num_features:4*self.num_features] = labels
 
             self.__background = background
 
@@ -351,6 +368,7 @@ class ActiveRegion(ActiveRegionParameters):
         9. Keep the remaining 6 largest umbras
         &#34;&#34;&#34;
         if self.__pumbra is None or self.__umbra is None:
+            #We first segment large groups (that may be penumbras or umbras)
             cont_bounded = (255 * (self.cont - np.min(self.cont)) / np.ptp(self.cont)).astype(np.uint8)
  
             block_size = np.min(self.shape)
@@ -377,11 +395,14 @@ class ActiveRegion(ActiveRegionParameters):
                 self.__pumbra = pu_mask
                 return
 
+            # For each large group - determine if this is a penumbra / umbra combo or just umbra
             for i in labels:
                 mask = labeled_0 == i
                 mx = np.max(self.cont[mask])
                 mn = np.min(self.cont[mask])
                 t = (mx - mn) / 2 + mn
+
+                # PENUMBRA AND UMBRA
                 if mx - mn &gt; 21000:
                     # Both umbra and penumbra
                     um = mask &amp; (self.cont &lt;= t)
@@ -410,8 +431,8 @@ class ActiveRegion(ActiveRegionParameters):
                         cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, &#34;umbra&#34;)
                         um_mask |= mask
 
+                # ONLY UMBRA
                 else:
-                    # Only umbra
                     um = mask &amp; (self.cont &lt;= t)
                     cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, &#34;umbra&#34;)
                     um_mask |= um
@@ -564,7 +585,7 @@ class ActiveRegion(ActiveRegionParameters):
 <dl>
 <dt id="flares.active_region.ActiveRegion"><code class="flex name class">
 <span>class <span class="ident">ActiveRegion</span></span>
-<span>(</span><span>hnum: int, date: datetime.datetime, root: str)</span>
+<span>(</span><span>hnum: int, date: datetime.datetime, root: str, num_features=0)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>An Active Region is an entry point into
@@ -638,7 +659,7 @@ could be turned into a ticket and fixed, but for the time being I am ignoring th
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">class ActiveRegion(ActiveRegionParameters):
-    def __init__(self, hnum: int, date: datetime, root: str):
+    def __init__(self, hnum: int, date: datetime, root: str, num_features = 0):
         &#34;&#34;&#34;An Active Region is an entry point into 
         parameterization, segmentation, and graph methods. 
 
@@ -707,7 +728,7 @@ could be turned into a ticket and fixed, but for the time being I am ignoring th
         self.By[np.abs(self.By) &lt; minimum_val] = minimum_val
 
         # Now Bx By Bz are defined so generate the parameter class
-        super().__init__(self.Bz, self.By, self.Bx)
+        super().__init__(self.Bz, self.By, self.Bx, num_features)
 
         # The four &#34;segments&#34; as raw arrays (no nodes for graph)
         self.__background = None
@@ -716,15 +737,15 @@ could be turned into a ticket and fixed, but for the time being I am ignoring th
         self.__nl = None
 
         # The Three data sets
-        self.__sharps, self.__sharps_labels = data[&#34;sharps&#34;].values(), data[&#34;sharps&#34;].keys()
-        self.__baseline, self.__baseline_labels = self.physical_features(np.ones(self.shape, dtype = bool), &#34;bas_&#34;)
+        self.__sharps, self.__sharps_labels = np.array(data[&#34;sharps&#34;].values()), list(data[&#34;sharps&#34;].keys())
+        self.__baseline, self.__baseline_labels = None, None
         self.__segmented, self.__segmented_labels = np.zeros(4 *  self.num_features), [&#34;&#34; for _ in range(4 * self.num_features)]
         self.__G = nx.Graph()
 
         # GRAPH DATA
         # Graph data is split between masks and feature vectors. Each &#34;mask&#34; is a node that gets its physical features computed on
         self.__node_masks = np.zeros((0, self.shape[0], self.shape[1]), dtype = bool)
-        self.__G_labels = self.__baseline_labels # Just a copy of baseline
+        
 
     def show_graph(self, axs_cont, axs_seg):
         &#34;&#34;&#34;Plots the continuum next to segmented graph with nodes
@@ -745,9 +766,22 @@ could be turned into a ticket and fixed, but for the time being I am ignoring th
         pos = nx.get_node_attributes(self.__G, &#34;pos&#34;)
 
         axs_cont.imshow(self.cont)
-        nx.draw(self.__G, pos, axs_cont, node_size = 10, cmap = plt.get_cmap(&#39;viridis&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)
+        nx.draw(self.__G, pos, axs_cont, node_size = 100, cmap = plt.get_cmap(&#39;gray&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)
         axs_seg.imshow(self.__umbra | self.__pumbra | self.__nl, cmap = &#34;gray&#34;)
-        nx.draw(self.__G, pos, axs_seg, node_size = 10, cmap = plt.get_cmap(&#39;viridis&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)
+        nx.draw(self.__G, pos, axs_seg, node_size = 100, cmap = plt.get_cmap(&#39;viridis&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)
+
+    def draw_graph(self, axs):
+        &#34;&#34;&#34;Draws just the graph without a background image of the continuum
+
+        Args:
+            axs (pyplot.axis): The axis to write the graph to
+        &#34;&#34;&#34;
+        self.assert_masks()
+
+        color_keys = {&#34;penumbra&#34; : 1.0, &#34;umbra&#34; : 0.5714285714285714, &#34;nl&#34; : 0.0}
+        values = [color_keys.get(x[1][&#34;type&#34;], 0.25) for x in self.__G.nodes.data()]
+        nx.draw(self.__G, ax = axs, node_size = 100, cmap = plt.get_cmap(&#39;viridis&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)
+
 
     def show_umbra(self, axs_orig, axs_seg):
         &#34;&#34;&#34;Shows the umbra segmented next to the continuum
@@ -810,6 +844,7 @@ could be turned into a ticket and fixed, but for the time being I am ignoring th
             data, labels
         &#34;&#34;&#34;
         self.assert_masks()
+        self.__G_labels = self.__baseline_labels # Just a copy of baseline
         return self.__G, self.__G_labels
 
     def get_sharps(self):
@@ -820,6 +855,7 @@ could be turned into a ticket and fixed, but for the time being I am ignoring th
         Returns:
             data, labels
         &#34;&#34;&#34;
+        self.assert_masks()
         return self.__sharps, self.__sharps_labels
 
     def get_baseline(self):
@@ -828,6 +864,7 @@ could be turned into a ticket and fixed, but for the time being I am ignoring th
         Returns:
             numpy array: baseline data set
         &#34;&#34;&#34;
+        self.assert_masks()
         return self.__baseline, self.__baseline_labels
 
     def get_segmented(self):
@@ -843,6 +880,7 @@ could be turned into a ticket and fixed, but for the time being I am ignoring th
         &#34;&#34;&#34;One function that generates all three masks. If all three masks are already
         generated, this function does nothing
         &#34;&#34;&#34;
+        self.__baseline, self.__baseline_labels = self.physical_features(np.ones(self.shape, dtype = bool), &#34;bas_&#34;)
         self.assert_neutral_lines()
         self.assert_umbra_pumbra()
         self.assert_background()
@@ -861,8 +899,8 @@ could be turned into a ticket and fixed, but for the time being I am ignoring th
 
             # Update dataset
             data, labels = self.physical_features(background, &#34;bckg_&#34;)
-            self.__segmented[2*self.num_features:3*self.num_features] = data
-            self.__segmented_labels[2*self.num_features:3*self.num_features] = labels
+            self.__segmented[3*self.num_features:4*self.num_features] = data
+            self.__segmented_labels[3*self.num_features:4*self.num_features] = labels
 
             self.__background = background
 
@@ -936,6 +974,7 @@ could be turned into a ticket and fixed, but for the time being I am ignoring th
         9. Keep the remaining 6 largest umbras
         &#34;&#34;&#34;
         if self.__pumbra is None or self.__umbra is None:
+            #We first segment large groups (that may be penumbras or umbras)
             cont_bounded = (255 * (self.cont - np.min(self.cont)) / np.ptp(self.cont)).astype(np.uint8)
  
             block_size = np.min(self.shape)
@@ -962,11 +1001,14 @@ could be turned into a ticket and fixed, but for the time being I am ignoring th
                 self.__pumbra = pu_mask
                 return
 
+            # For each large group - determine if this is a penumbra / umbra combo or just umbra
             for i in labels:
                 mask = labeled_0 == i
                 mx = np.max(self.cont[mask])
                 mn = np.min(self.cont[mask])
                 t = (mx - mn) / 2 + mn
+
+                # PENUMBRA AND UMBRA
                 if mx - mn &gt; 21000:
                     # Both umbra and penumbra
                     um = mask &amp; (self.cont &lt;= t)
@@ -995,8 +1037,8 @@ could be turned into a ticket and fixed, but for the time being I am ignoring th
                         cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, &#34;umbra&#34;)
                         um_mask |= mask
 
+                # ONLY UMBRA
                 else:
-                    # Only umbra
                     um = mask &amp; (self.cont &lt;= t)
                     cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, &#34;umbra&#34;)
                     um_mask |= um
@@ -1165,8 +1207,8 @@ Background is simply <span><span class="MathJax_Preview">\neg (Umbra \cup Penumb
 
         # Update dataset
         data, labels = self.physical_features(background, &#34;bckg_&#34;)
-        self.__segmented[2*self.num_features:3*self.num_features] = data
-        self.__segmented_labels[2*self.num_features:3*self.num_features] = labels
+        self.__segmented[3*self.num_features:4*self.num_features] = data
+        self.__segmented_labels[3*self.num_features:4*self.num_features] = labels
 
         self.__background = background</code></pre>
 </details>
@@ -1185,6 +1227,7 @@ generated, this function does nothing</p></div>
     &#34;&#34;&#34;One function that generates all three masks. If all three masks are already
     generated, this function does nothing
     &#34;&#34;&#34;
+    self.__baseline, self.__baseline_labels = self.physical_features(np.ones(self.shape, dtype = bool), &#34;bas_&#34;)
     self.assert_neutral_lines()
     self.assert_umbra_pumbra()
     self.assert_background()</code></pre>
@@ -1319,6 +1362,7 @@ if the difference between maximum and minimum flux in the mask is greater than 2
     9. Keep the remaining 6 largest umbras
     &#34;&#34;&#34;
     if self.__pumbra is None or self.__umbra is None:
+        #We first segment large groups (that may be penumbras or umbras)
         cont_bounded = (255 * (self.cont - np.min(self.cont)) / np.ptp(self.cont)).astype(np.uint8)
 
         block_size = np.min(self.shape)
@@ -1345,11 +1389,14 @@ if the difference between maximum and minimum flux in the mask is greater than 2
             self.__pumbra = pu_mask
             return
 
+        # For each large group - determine if this is a penumbra / umbra combo or just umbra
         for i in labels:
             mask = labeled_0 == i
             mx = np.max(self.cont[mask])
             mn = np.min(self.cont[mask])
             t = (mx - mn) / 2 + mn
+
+            # PENUMBRA AND UMBRA
             if mx - mn &gt; 21000:
                 # Both umbra and penumbra
                 um = mask &amp; (self.cont &lt;= t)
@@ -1378,8 +1425,8 @@ if the difference between maximum and minimum flux in the mask is greater than 2
                     cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, &#34;umbra&#34;)
                     um_mask |= mask
 
+            # ONLY UMBRA
             else:
-                # Only umbra
                 um = mask &amp; (self.cont &lt;= t)
                 cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, &#34;umbra&#34;)
                 um_mask |= um
@@ -1395,6 +1442,33 @@ if the difference between maximum and minimum flux in the mask is greater than 2
 
         self.__umbra = um_mask
         self.__pumbra = pu_mask</code></pre>
+</details>
+</dd>
+<dt id="flares.active_region.ActiveRegion.draw_graph"><code class="name flex">
+<span>def <span class="ident">draw_graph</span></span>(<span>self, axs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Draws just the graph without a background image of the continuum</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>axs</code></strong> :&ensp;<code>pyplot.axis</code></dt>
+<dd>The axis to write the graph to</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def draw_graph(self, axs):
+    &#34;&#34;&#34;Draws just the graph without a background image of the continuum
+
+    Args:
+        axs (pyplot.axis): The axis to write the graph to
+    &#34;&#34;&#34;
+    self.assert_masks()
+
+    color_keys = {&#34;penumbra&#34; : 1.0, &#34;umbra&#34; : 0.5714285714285714, &#34;nl&#34; : 0.0}
+    values = [color_keys.get(x[1][&#34;type&#34;], 0.25) for x in self.__G.nodes.data()]
+    nx.draw(self.__G, ax = axs, node_size = 100, cmap = plt.get_cmap(&#39;viridis&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)</code></pre>
 </details>
 </dd>
 <dt id="flares.active_region.ActiveRegion.get_baseline"><code class="name flex">
@@ -1417,6 +1491,7 @@ if the difference between maximum and minimum flux in the mask is greater than 2
     Returns:
         numpy array: baseline data set
     &#34;&#34;&#34;
+    self.assert_masks()
     return self.__baseline, self.__baseline_labels</code></pre>
 </details>
 </dd>
@@ -1441,6 +1516,7 @@ if the difference between maximum and minimum flux in the mask is greater than 2
         data, labels
     &#34;&#34;&#34;
     self.assert_masks()
+    self.__G_labels = self.__baseline_labels # Just a copy of baseline
     return self.__G, self.__G_labels</code></pre>
 </details>
 </dd>
@@ -1488,6 +1564,7 @@ if the difference between maximum and minimum flux in the mask is greater than 2
     Returns:
         data, labels
     &#34;&#34;&#34;
+    self.assert_masks()
     return self.__sharps, self.__sharps_labels</code></pre>
 </details>
 </dd>
@@ -1560,9 +1637,9 @@ to be close - there are a few good examples of nodes that work well - see docume
     pos = nx.get_node_attributes(self.__G, &#34;pos&#34;)
 
     axs_cont.imshow(self.cont)
-    nx.draw(self.__G, pos, axs_cont, node_size = 10, cmap = plt.get_cmap(&#39;viridis&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)
+    nx.draw(self.__G, pos, axs_cont, node_size = 100, cmap = plt.get_cmap(&#39;gray&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)
     axs_seg.imshow(self.__umbra | self.__pumbra | self.__nl, cmap = &#34;gray&#34;)
-    nx.draw(self.__G, pos, axs_seg, node_size = 10, cmap = plt.get_cmap(&#39;viridis&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)</code></pre>
+    nx.draw(self.__G, pos, axs_seg, node_size = 100, cmap = plt.get_cmap(&#39;viridis&#39;), node_color = values, with_labels = False, font_color = &#34;white&#34;)</code></pre>
 </details>
 </dd>
 <dt id="flares.active_region.ActiveRegion.show_neutral_line"><code class="name flex">
@@ -1697,6 +1774,7 @@ to be close - there are a few good examples of nodes that work well - see docume
 <li><code><a title="flares.fields.ActiveRegionParameters.phitot" href="fields.html#flares.fields.ActiveRegionParameters.phitot">phitot</a></code></li>
 <li><code><a title="flares.fields.ActiveRegionParameters.phitotabs" href="fields.html#flares.fields.ActiveRegionParameters.phitotabs">phitotabs</a></code></li>
 <li><code><a title="flares.fields.ActiveRegionParameters.physical_features" href="fields.html#flares.fields.ActiveRegionParameters.physical_features">physical_features</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.register_func" href="fields.html#flares.fields.ActiveRegionParameters.register_func">register_func</a></code></li>
 <li><code><a title="flares.fields.ActiveRegionParameters.rho_moments" href="fields.html#flares.fields.ActiveRegionParameters.rho_moments">rho_moments</a></code></li>
 <li><code><a title="flares.fields.ActiveRegionParameters.shear_moments" href="fields.html#flares.fields.ActiveRegionParameters.shear_moments">shear_moments</a></code></li>
 <li><code><a title="flares.fields.ActiveRegionParameters.totrho" href="fields.html#flares.fields.ActiveRegionParameters.totrho">totrho</a></code></li>
@@ -1729,6 +1807,7 @@ to be close - there are a few good examples of nodes that work well - see docume
 <li><code><a title="flares.active_region.ActiveRegion.assert_masks" href="#flares.active_region.ActiveRegion.assert_masks">assert_masks</a></code></li>
 <li><code><a title="flares.active_region.ActiveRegion.assert_neutral_lines" href="#flares.active_region.ActiveRegion.assert_neutral_lines">assert_neutral_lines</a></code></li>
 <li><code><a title="flares.active_region.ActiveRegion.assert_umbra_pumbra" href="#flares.active_region.ActiveRegion.assert_umbra_pumbra">assert_umbra_pumbra</a></code></li>
+<li><code><a title="flares.active_region.ActiveRegion.draw_graph" href="#flares.active_region.ActiveRegion.draw_graph">draw_graph</a></code></li>
 <li><code><a title="flares.active_region.ActiveRegion.get_baseline" href="#flares.active_region.ActiveRegion.get_baseline">get_baseline</a></code></li>
 <li><code><a title="flares.active_region.ActiveRegion.get_graph" href="#flares.active_region.ActiveRegion.get_graph">get_graph</a></code></li>
 <li><code><a title="flares.active_region.ActiveRegion.get_segmented" href="#flares.active_region.ActiveRegion.get_segmented">get_segmented</a></code></li>

@@ -222,7 +222,7 @@ class ActiveRegionFields:
 
 class ActiveRegionParameters(ActiveRegionFields):
 
-    def __init__(self, Bz, By, Bx):
+    def __init__(self, Bz, By, Bx, num_features):
         """A place to define physical parameters of an active region
 
         Args:
@@ -239,8 +239,16 @@ class ActiveRegionParameters(ActiveRegionFields):
                                 self.twist_moments,self.hc_moments,self.hctot,self.hctotabs, \
                                 self.shear_moments,self.rho_moments,self.totrho, self.entropy,\
                                 self.fractal_dim]
-        self.num_features = 58
+        self.num_features = 58 + num_features
         self.labels = []
+
+    def register_func(self, func):
+        """Registers a parameter function
+
+        Args:
+            func ([type]): A python function that takes in a mask and returns a (label, scalar) or ([label1...labeln], [scalar1...scalarn]) itterables
+        """
+        self.chosen_funcs.append(func)
 
     def physical_features(self, mask, labels_prefix = ""):
         """Extracts the physical fetures from a subset of the active region.

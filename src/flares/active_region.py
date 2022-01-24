@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 
 
 class ActiveRegion(ActiveRegionParameters):
-    def __init__(self, hnum: int, date: datetime, root: str):
+    def __init__(self, hnum: int, date: datetime, root: str, num_features = 0):
         """An Active Region is an entry point into 
         parameterization, segmentation, and graph methods. 
 
@@ -93,7 +93,7 @@ class ActiveRegion(ActiveRegionParameters):
         self.By[np.abs(self.By) < minimum_val] = minimum_val
 
         # Now Bx By Bz are defined so generate the parameter class
-        super().__init__(self.Bz, self.By, self.Bx)
+        super().__init__(self.Bz, self.By, self.Bx, num_features)
 
         # The four "segments" as raw arrays (no nodes for graph)
         self.__background = None
@@ -103,14 +103,14 @@ class ActiveRegion(ActiveRegionParameters):
 
         # The Three data sets
         self.__sharps, self.__sharps_labels = np.array(data["sharps"].values()), list(data["sharps"].keys())
-        self.__baseline, self.__baseline_labels = self.physical_features(np.ones(self.shape, dtype = bool), "bas_")
+        self.__baseline, self.__baseline_labels = None, None
         self.__segmented, self.__segmented_labels = np.zeros(4 *  self.num_features), ["" for _ in range(4 * self.num_features)]
         self.__G = nx.Graph()
 
         # GRAPH DATA
         # Graph data is split between masks and feature vectors. Each "mask" is a node that gets its physical features computed on
         self.__node_masks = np.zeros((0, self.shape[0], self.shape[1]), dtype = bool)
-        self.__G_labels = self.__baseline_labels # Just a copy of baseline
+        
 
     def show_graph(self, axs_cont, axs_seg):
         """Plots the continuum next to segmented graph with nodes
@@ -136,6 +136,11 @@ class ActiveRegion(ActiveRegionParameters):
         nx.draw(self.__G, pos, axs_seg, node_size = 100, cmap = plt.get_cmap('viridis'), node_color = values, with_labels = False, font_color = "white")
 
     def draw_graph(self, axs):
+        """Draws just the graph without a background image of the continuum
+
+        Args:
+            axs (pyplot.axis): The axis to write the graph to
+        """
         self.assert_masks()
 
         color_keys = {"penumbra" : 1.0, "umbra" : 0.5714285714285714, "nl" : 0.0}
@@ -204,6 +209,7 @@ class ActiveRegion(ActiveRegionParameters):
             data, labels
         """
         self.assert_masks()
+        self.__G_labels = self.__baseline_labels # Just a copy of baseline
         return self.__G, self.__G_labels
 
     def get_sharps(self):
@@ -239,6 +245,7 @@ class ActiveRegion(ActiveRegionParameters):
         """One function that generates all three masks. If all three masks are already
         generated, this function does nothing
         """
+        self.__baseline, self.__baseline_labels = self.physical_features(np.ones(self.shape, dtype = bool), "bas_")
         self.assert_neutral_lines()
         self.assert_umbra_pumbra()
         self.assert_background()

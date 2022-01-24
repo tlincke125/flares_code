@@ -251,7 +251,7 @@ class ActiveRegionFields:
 
 class ActiveRegionParameters(ActiveRegionFields):
 
-    def __init__(self, Bz, By, Bx):
+    def __init__(self, Bz, By, Bx, num_features):
         &#34;&#34;&#34;A place to define physical parameters of an active region
 
         Args:
@@ -268,8 +268,16 @@ class ActiveRegionParameters(ActiveRegionFields):
                                 self.twist_moments,self.hc_moments,self.hctot,self.hctotabs, \
                                 self.shear_moments,self.rho_moments,self.totrho, self.entropy,\
                                 self.fractal_dim]
-        self.num_features = 58
+        self.num_features = 58 + num_features
         self.labels = []
+
+    def register_func(self, func):
+        &#34;&#34;&#34;Registers a parameter function
+
+        Args:
+            func ([type]): A python function that takes in a mask and returns a (label, scalar) or ([label1...labeln], [scalar1...scalarn]) itterables
+        &#34;&#34;&#34;
+        self.chosen_funcs.append(func)
 
     def physical_features(self, mask, labels_prefix = &#34;&#34;):
         &#34;&#34;&#34;Extracts the physical fetures from a subset of the active region.
@@ -1427,7 +1435,7 @@ the field you use is referencing the same active region</p>
 </dd>
 <dt id="flares.fields.ActiveRegionParameters"><code class="flex name class">
 <span>class <span class="ident">ActiveRegionParameters</span></span>
-<span>(</span><span>Bz, By, Bx)</span>
+<span>(</span><span>Bz, By, Bx, num_features)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>A place to define physical parameters of an active region</p>
@@ -1446,7 +1454,7 @@ the field you use is referencing the same active region</p>
 </summary>
 <pre><code class="python">class ActiveRegionParameters(ActiveRegionFields):
 
-    def __init__(self, Bz, By, Bx):
+    def __init__(self, Bz, By, Bx, num_features):
         &#34;&#34;&#34;A place to define physical parameters of an active region
 
         Args:
@@ -1463,8 +1471,16 @@ the field you use is referencing the same active region</p>
                                 self.twist_moments,self.hc_moments,self.hctot,self.hctotabs, \
                                 self.shear_moments,self.rho_moments,self.totrho, self.entropy,\
                                 self.fractal_dim]
-        self.num_features = 58
+        self.num_features = 58 + num_features
         self.labels = []
+
+    def register_func(self, func):
+        &#34;&#34;&#34;Registers a parameter function
+
+        Args:
+            func ([type]): A python function that takes in a mask and returns a (label, scalar) or ([label1...labeln], [scalar1...scalarn]) itterables
+        &#34;&#34;&#34;
+        self.chosen_funcs.append(func)
 
     def physical_features(self, mask, labels_prefix = &#34;&#34;):
         &#34;&#34;&#34;Extracts the physical fetures from a subset of the active region.
@@ -2840,6 +2856,29 @@ flux <em>within that neutral line</em>)</p>
     return np.array(features), labels</code></pre>
 </details>
 </dd>
+<dt id="flares.fields.ActiveRegionParameters.register_func"><code class="name flex">
+<span>def <span class="ident">register_func</span></span>(<span>self, func)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Registers a parameter function</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>func</code></strong> :&ensp;<code>[type]</code></dt>
+<dd>A python function that takes in a mask and returns a (label, scalar) or ([label1&hellip;labeln], [scalar1&hellip;scalarn]) itterables</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def register_func(self, func):
+    &#34;&#34;&#34;Registers a parameter function
+
+    Args:
+        func ([type]): A python function that takes in a mask and returns a (label, scalar) or ([label1...labeln], [scalar1...scalarn]) itterables
+    &#34;&#34;&#34;
+    self.chosen_funcs.append(func)</code></pre>
+</details>
+</dd>
 <dt id="flares.fields.ActiveRegionParameters.rho_moments"><code class="name flex">
 <span>def <span class="ident">rho_moments</span></span>(<span>self, mask)</span>
 </code></dt>
@@ -3132,6 +3171,7 @@ discriminant analysis. <em>The Astrophysical Journal</em> 595(2):1296-1306, 2003
 <li><code><a title="flares.fields.ActiveRegionParameters.phitot" href="#flares.fields.ActiveRegionParameters.phitot">phitot</a></code></li>
 <li><code><a title="flares.fields.ActiveRegionParameters.phitotabs" href="#flares.fields.ActiveRegionParameters.phitotabs">phitotabs</a></code></li>
 <li><code><a title="flares.fields.ActiveRegionParameters.physical_features" href="#flares.fields.ActiveRegionParameters.physical_features">physical_features</a></code></li>
+<li><code><a title="flares.fields.ActiveRegionParameters.register_func" href="#flares.fields.ActiveRegionParameters.register_func">register_func</a></code></li>
 <li><code><a title="flares.fields.ActiveRegionParameters.rho_moments" href="#flares.fields.ActiveRegionParameters.rho_moments">rho_moments</a></code></li>
 <li><code><a title="flares.fields.ActiveRegionParameters.shear_moments" href="#flares.fields.ActiveRegionParameters.shear_moments">shear_moments</a></code></li>
 <li><code><a title="flares.fields.ActiveRegionParameters.totrho" href="#flares.fields.ActiveRegionParameters.totrho">totrho</a></code></li>
