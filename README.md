@@ -2,21 +2,21 @@
 ***
 
 ## 1.1 Building the stable package
-Note that at the early stages, stable package isn't bug free - tracking issues and fixing bugs will still happen. The most recent stable build is 0.0.2-stable
+In the early stages, the stable package isn't bug free - tracking issues and fixing bugs will still. The most recent stable build is 0.0.2-stable.
 
-To install, simply run
+To install:
 ```
 $ pip3 install stable_builds/flares-segmentation-tlincke125-0.0.2-stable.tar.gz
 ```
 
 ## 1.2 Building the latest package 
-First, checkout the **master** branch. Then, in the root directory, build the package using the following command:
+First, checkout the **master** branch. Then, in the root directory, build the package and documentation using the following command:
 
 ```
-$ python3 -m build
+$ ./install.sh
 ``` 
 
-This should have produced two files in the ./dist folder.
+This should produce two files in the ./dist folder and update all files in docs/documentation/flares.
 
 To install the package, go into the dist folder and install the package using pip:
 
@@ -27,14 +27,7 @@ $ pip3 install flares-segmentation-tlincke125-<version>.tar.gz
 
 Where \<version\> is the highest version (or any other version you wish to install).
 
-## 1.3 Building documentation
-Documentation is generated using pdoc. To build the documentation, run:
-
-```
-$ pdoc -f --html -o ./docs/documentation ./src/flares -c latex_math=True
-```
-
-Then open docs/documentation/flares/index.html in your prefered browser
+You can then open docs/documentation/flares/index.html in your prefered browser.
 
 # 2 Getting Started
 ***

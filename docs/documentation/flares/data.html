@@ -37,6 +37,21 @@ import numpy as np
 # as well as the physical values
 INCLUDE_ERRORS = True
 
+def get_hnums(root):
+    &#34;&#34;&#34;Returns a list of harpnumbers found in root/magnetogram
+
+    Args:
+        root (string): The root directory for magnetogram and continuum folders
+
+    Returns:
+        list: A list of harpnumbers as ints
+    &#34;&#34;&#34;
+    folders = os.listdir(os.path.join(root, &#34;magnetogram&#34;))
+    hnums = []
+    for file in folders:
+        hnums.append(int(file.split(&#34;_&#34;)[1]))
+    return hnums
+
 ###### DATA
 # Get a list of dates active for a specific harpnumber
 def get_dates(harpnum, root, sort = False):
@@ -118,7 +133,7 @@ def get_data(harpnum, date, root):
         filename = os.path.join(root, f1, f&#34;sharp_{harpnum}&#34;, f&#34;hmi.sharp_cea_720s.{harpnum}.{date_str}_TAI.{f2}.fits&#34;)
         assert os.path.isfile(filename)
         with fits.open(filename) as hdul:
-
+            hdul.verify(&#39;fix&#39;)
             # Gather sharps info
             if f2 == &#34;Br&#34;:
                 for label in sharps_features:
@@ -186,7 +201,7 @@ JSOC documentation for a reference</p></div>
         filename = os.path.join(root, f1, f&#34;sharp_{harpnum}&#34;, f&#34;hmi.sharp_cea_720s.{harpnum}.{date_str}_TAI.{f2}.fits&#34;)
         assert os.path.isfile(filename)
         with fits.open(filename) as hdul:
-
+            hdul.verify(&#39;fix&#39;)
             # Gather sharps info
             if f2 == &#34;Br&#34;:
                 for label in sharps_features:
@@ -238,6 +253,41 @@ JSOC documentation for a reference</p></div>
     return sorted(ret) if sort else ret</code></pre>
 </details>
 </dd>
+<dt id="flares.data.get_hnums"><code class="name flex">
+<span>def <span class="ident">get_hnums</span></span>(<span>root)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Returns a list of harpnumbers found in root/magnetogram</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>root</code></strong> :&ensp;<code>string</code></dt>
+<dd>The root directory for magnetogram and continuum folders</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>list</code></dt>
+<dd>A list of harpnumbers as ints</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_hnums(root):
+    &#34;&#34;&#34;Returns a list of harpnumbers found in root/magnetogram
+
+    Args:
+        root (string): The root directory for magnetogram and continuum folders
+
+    Returns:
+        list: A list of harpnumbers as ints
+    &#34;&#34;&#34;
+    folders = os.listdir(os.path.join(root, &#34;magnetogram&#34;))
+    hnums = []
+    for file in folders:
+        hnums.append(int(file.split(&#34;_&#34;)[1]))
+    return hnums</code></pre>
+</details>
+</dd>
 </dl>
 </section>
 <section>
@@ -258,6 +308,7 @@ JSOC documentation for a reference</p></div>
 <ul class="">
 <li><code><a title="flares.data.get_data" href="#flares.data.get_data">get_data</a></code></li>
 <li><code><a title="flares.data.get_dates" href="#flares.data.get_dates">get_dates</a></code></li>
+<li><code><a title="flares.data.get_hnums" href="#flares.data.get_hnums">get_hnums</a></code></li>
 </ul>
 </li>
 </ul>

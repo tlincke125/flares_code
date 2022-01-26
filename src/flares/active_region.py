@@ -283,7 +283,6 @@ class ActiveRegion(ActiveRegionParameters):
         """
         if self.__nl is None:
             # Find neutral Lines
-            thresh = 150
             nl_mask = binary_dilation(self.Bz < -thresh, square(radius)) & binary_dilation(self.Bz > thresh, square(radius))
 
 

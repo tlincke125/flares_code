@@ -312,7 +312,6 @@ class ActiveRegion(ActiveRegionParameters):
         &#34;&#34;&#34;
         if self.__nl is None:
             # Find neutral Lines
-            thresh = 150
             nl_mask = binary_dilation(self.Bz &lt; -thresh, square(radius)) &amp; binary_dilation(self.Bz &gt; thresh, square(radius))
 
 
@@ -918,7 +917,6 @@ could be turned into a ticket and fixed, but for the time being I am ignoring th
         &#34;&#34;&#34;
         if self.__nl is None:
             # Find neutral Lines
-            thresh = 150
             nl_mask = binary_dilation(self.Bz &lt; -thresh, square(radius)) &amp; binary_dilation(self.Bz &gt; thresh, square(radius))
 
 
@@ -1266,7 +1264,6 @@ finds neutral lines using the method described by Schrijver in</p>
     &#34;&#34;&#34;
     if self.__nl is None:
         # Find neutral Lines
-        thresh = 150
         nl_mask = binary_dilation(self.Bz &lt; -thresh, square(radius)) &amp; binary_dilation(self.Bz &gt; thresh, square(radius))
 
 

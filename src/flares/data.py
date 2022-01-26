@@ -8,6 +8,21 @@ import numpy as np
 # as well as the physical values
 INCLUDE_ERRORS = True
 
+def get_hnums(root):
+    """Returns a list of harpnumbers found in root/magnetogram
+
+    Args:
+        root (string): The root directory for magnetogram and continuum folders
+
+    Returns:
+        list: A list of harpnumbers as ints
+    """
+    folders = os.listdir(os.path.join(root, "magnetogram"))
+    hnums = []
+    for file in folders:
+        hnums.append(int(file.split("_")[1]))
+    return hnums
+
 ###### DATA
 # Get a list of dates active for a specific harpnumber
 def get_dates(harpnum, root, sort = False):
@@ -89,7 +104,7 @@ def get_data(harpnum, date, root):
         filename = os.path.join(root, f1, f"sharp_{harpnum}", f"hmi.sharp_cea_720s.{harpnum}.{date_str}_TAI.{f2}.fits")
         assert os.path.isfile(filename)
         with fits.open(filename) as hdul:
-
+            hdul.verify('fix')
             # Gather sharps info
             if f2 == "Br":
                 for label in sharps_features:

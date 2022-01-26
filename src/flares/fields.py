@@ -237,9 +237,8 @@ class ActiveRegionParameters(ActiveRegionFields):
                                 self.Bh_grad_moments,self.J_moments,self.itot,self.itotabs, \
                                 self.itot_polarity,self.Jh_moments,self.ihtot,self.ihtotabs, \
                                 self.twist_moments,self.hc_moments,self.hctot,self.hctotabs, \
-                                self.shear_moments,self.rho_moments,self.totrho, self.entropy,\
-                                self.fractal_dim]
-        self.num_features = 58 + num_features
+                                self.shear_moments,self.rho_moments,self.totrho]
+        self.num_features = 56 + num_features
         self.labels = []
 
     def register_func(self, func):
