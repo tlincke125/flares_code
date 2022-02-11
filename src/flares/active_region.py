@@ -145,7 +145,9 @@ class ActiveRegion(ActiveRegionParameters):
 
         color_keys = {"penumbra" : 1.0, "umbra" : 0.5714285714285714, "nl" : 0.0}
         values = [color_keys.get(x[1]["type"], 0.25) for x in self.__G.nodes.data()]
-        nx.draw(self.__G, ax = axs, node_size = 100, cmap = plt.get_cmap('viridis'), node_color = values, with_labels = False, font_color = "white")
+        pos = nx.get_node_attributes(self.__G, "pos")
+
+        nx.draw(self.__G, pos, axs, node_size = 100, cmap = plt.get_cmap('viridis'), node_color = values, with_labels = False, font_color = "white")
 
 
     def show_umbra(self, axs_orig, axs_seg):
@@ -283,33 +285,32 @@ class ActiveRegion(ActiveRegionParameters):
         """
         if self.__nl is None:
             # Find neutral Lines
+
+
+            ######### SEGMENTED DATA SET ############
             nl_mask = binary_dilation(self.Bz < -thresh, square(radius)) & binary_dilation(self.Bz > thresh, square(radius))
+            self.__nl = nl_mask.copy()
 
+            # Compute the segmented data set
+            data, labels = self.physical_features(nl_mask, "nl_")
+            self.__segmented[0:self.num_features] = data
+            self.__segmented_labels[0:self.num_features] = labels
 
+            ######### GRAPH DATA SET ################
             labeled, labels, sizes = self.__group_pixels(nl_mask)
             labels, sizes = self.__remove_small_groups(labeled, labels, sizes, 10)
             labels, sizes = self.__remove_percentage_max(labeled, labels, sizes)
             labels, sizes = self.__largest_n_clusters(labels, sizes)
 
             # Add all the graph nodes
-            nl_mask = np.zeros(self.shape, dtype = bool)
             cur_node = len(self.__node_masks)
-
-            if len(sizes) == 0:
-                self.__segmented[0:self.num_features] = 0
-                self.__nl = nl_mask
-                return
 
             for i in labels:
                 mask = labeled == i
                 cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, "neutral line")
-                nl_mask |= mask
 
-            # Compute the segmented data set
-            data, labels = self.physical_features(nl_mask, "nl_")
-            self.__segmented[0:self.num_features] = data
-            self.__segmented_labels[0:self.num_features] = labels
-            self.__nl = nl_mask
+            
+            
 
     
 
@@ -348,24 +349,22 @@ class ActiveRegion(ActiveRegionParameters):
             offset = 10
             binary_adaptive = cont_bounded < (threshold_local(cont_bounded, block_size, offset = offset) - offset)
 
+            ###### Filter Segmented ###########
             labeled_0, labels, sizes = self.__group_pixels(binary_adaptive)
-            labels, sizes = self.__remove_small_groups(labeled_0, labels, sizes)
             labels, sizes = self.__remove_bordering_pixels(labeled_0, labels, sizes)
+
+            ###### UMBRA SEGMENTED MASK #############
+            self.__umbra = (np.isin(labeled_0, labels))
+            
+            ###### Filter for graph #######
+            labels, sizes = self.__remove_small_groups(labeled_0, labels, sizes)
             labels, sizes = self.__remove_percentage_max(labeled_0, labels, sizes)
             labels, sizes = self.__largest_n_clusters(labels, sizes)
 
-            um_mask = np.zeros(self.shape, dtype = bool)
-            pu_mask = np.zeros(self.shape, dtype = bool)
-            cur_node = 0
-
-            if len(sizes) == 0:
-                self.__segmented[self.num_features:2*self.num_features] = 0
-                self.__segmented[2*self.num_features:3*self.num_features] = 0
-                self.__umbra = um_mask
-                self.__pumbra = pu_mask
-                return
+            self.__pumbra = np.zeros(self.shape, dtype = bool)
 
             # For each large group - determine if this is a penumbra / umbra combo or just umbra
+            cur_node = len(self.__node_masks)
             for i in labels:
                 mask = labeled_0 == i
                 mx = np.max(self.cont[mask])
@@ -388,7 +387,8 @@ class ActiveRegion(ActiveRegionParameters):
                     for i in labels:
                         mask = labeled == i
                         cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, "penumbra")
-                        pu_mask |= mask
+                        self.__pumbra |= mask
+                        self.__umbra &= ~mask
 
                     # Further segment the umbra node again
                     labeled, labels, sizes = self.__group_pixels(um)
@@ -399,25 +399,21 @@ class ActiveRegion(ActiveRegionParameters):
                     for i in labels:
                         mask = labeled == i
                         cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, "umbra")
-                        um_mask |= mask
 
                 # ONLY UMBRA
                 else:
                     um = mask & (self.cont <= t)
                     cur_node = self.__ar_add_node(self.physical_features(mask)[0], cur_node, mask, "umbra")
-                    um_mask |= um
             
-            # Compute the segmented data set
-            data, labels = self.physical_features(um_mask, "um_")
+            
+            data, labels = self.physical_features(self.__umbra, "um_")
             self.__segmented[self.num_features:2*self.num_features] = data
             self.__segmented_labels[self.num_features:2*self.num_features] = labels
 
-            data, labels = self.physical_features(um_mask, "pu_")
+            data, labels = self.physical_features(self.__pumbra, "pu_")
             self.__segmented[2*self.num_features:3*self.num_features] = data
             self.__segmented_labels[2*self.num_features:3*self.num_features] = labels
 
-            self.__umbra = um_mask
-            self.__pumbra = pu_mask
 
     def __group_pixels(self, mask):
         """Groups pixels in a binary mask based on if they are touching
@@ -540,6 +536,14 @@ class ActiveRegion(ActiveRegionParameters):
 
         self.__node_masks = np.concatenate((self.__node_masks, mask_dil[None,...]), axis = 0)
         return cur_node + 1
+
+    def get_node_masks(self):
+        """Getter for node masks
+
+        Returns:
+            np.array: A list of masks lining up to each of the node indexes / node names
+        """
+        return self.__node_masks
 
     
 
